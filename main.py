@@ -52,12 +52,17 @@ TOKEN_EXPIRE_HOURS = 24 * 14  # 14 jours
 COOKIE_NAME = "vsw_session"
 SECURE_COOKIE = os.getenv("SECURE_COOKIE", "false").lower() == "true"
 
-CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", 30))
+CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", 20))  # Délai entre scans (en secondes)
 DB_NAME = os.getenv("DB_NAME", "vinted_sniper.db")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8000))
 INITIAL_ADMIN_EMAIL = os.getenv("INITIAL_ADMIN_EMAIL", "").lower().strip()
 ALLOW_REGISTRATION = os.getenv("ALLOW_REGISTRATION", "true").lower() == "true"
+
+# Limites par tier
+TRIAL_DURATION_DAYS = int(os.getenv("TRIAL_DURATION_DAYS", 7))
+MAX_FILTERS_FREE = int(os.getenv("MAX_FILTERS_FREE", 3))
+TRIAL_TIERS = ("trial", "pro", "accompaniment", "admin")  # Reçoivent les notifs WS temps réel
 
 logging.basicConfig(
     level=logging.INFO,
@@ -301,10 +306,19 @@ async def scan_loop(app: FastAPI):
                     )
                     await app.state.db.commit()
 
-                    await app.state.manager.send_to_user(
-                        user_id, {"type": "new_item", "item": processed}
-                    )
-                    await asyncio.sleep(0.3)
+                    # ── Notifications WS uniquement pour les tiers payants (pas free) ──
+                    # On regarde le tier de l'utilisateur
+                    async with app.state.db.execute(
+                        "SELECT tier FROM users WHERE id = ?", (user_id,)
+                    ) as c2:
+                        urow = await c2.fetchone()
+                    user_tier = urow[0] if urow else "free"
+
+                    if user_tier in TRIAL_TIERS:
+                        await app.state.manager.send_to_user(
+                            user_id, {"type": "new_item", "item": processed}
+                        )
+                    await asyncio.sleep(0.2)
 
         except asyncio.CancelledError:
             break
@@ -328,10 +342,14 @@ async def lifespan(app: FastAPI):
             email TEXT UNIQUE NOT NULL,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            tier TEXT NOT NULL DEFAULT 'free',
+            tier TEXT NOT NULL DEFAULT 'trial',
             invite_code_used TEXT,
+            trial_started_at DATETIME,
+            trial_ends_at DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- Migration douce pour DB existante (ignore l'erreur si la colonne existe déjà)
 
         CREATE TABLE IF NOT EXISTS invite_codes (
             code TEXT PRIMARY KEY,
@@ -375,6 +393,14 @@ async def lifespan(app: FastAPI):
         CREATE INDEX IF NOT EXISTS idx_items_user ON items_cache(user_id, detected_at DESC);
         CREATE INDEX IF NOT EXISTS idx_items_filter ON items_cache(filter_id);
     """)
+
+    # Migrations douces (pour DBs créées avant l'ajout de trial_started_at / trial_ends_at)
+    for col in ("trial_started_at DATETIME", "trial_ends_at DATETIME"):
+        try:
+            await db.execute(f"ALTER TABLE users ADD COLUMN {col}")
+        except Exception:
+            pass  # colonne déjà présente
+
     await db.commit()
 
     app.state.db = db
@@ -408,18 +434,46 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Non authentifié")
 
     async with app.state.db.execute(
-        "SELECT id, email, username, tier, created_at FROM users WHERE id = ?",
+        "SELECT id, email, username, tier, created_at, trial_started_at, trial_ends_at "
+        "FROM users WHERE id = ?",
         (user_id,),
     ) as c:
         row = await c.fetchone()
     if not row:
         raise HTTPException(status_code=401, detail="Utilisateur introuvable")
+
+    user_id_db, email, username, tier, created_at, trial_start, trial_end = row
+
+    # ── Expiration automatique du trial : passage en 'free' ──
+    if tier == "trial" and trial_end:
+        # Parse la date stockée en string SQLite
+        try:
+            te = datetime.fromisoformat(trial_end) if isinstance(trial_end, str) else trial_end
+            if datetime.now() > te:
+                await app.state.db.execute(
+                    "UPDATE users SET tier = 'free' WHERE id = ?", (user_id_db,)
+                )
+                await app.state.db.commit()
+                tier = "free"
+        except (ValueError, TypeError):
+            pass
+
+    # ── Admin auto si l'email correspond à INITIAL_ADMIN_EMAIL (failsafe) ──
+    if INITIAL_ADMIN_EMAIL and email == INITIAL_ADMIN_EMAIL and tier != "admin":
+        await app.state.db.execute(
+            "UPDATE users SET tier = 'admin' WHERE id = ?", (user_id_db,)
+        )
+        await app.state.db.commit()
+        tier = "admin"
+
     return {
-        "id": row[0],
-        "email": row[1],
-        "username": row[2],
-        "tier": row[3],
-        "created_at": row[4],
+        "id": user_id_db,
+        "email": email,
+        "username": username,
+        "tier": tier,
+        "created_at": created_at,
+        "trial_started_at": trial_start,
+        "trial_ends_at": trial_end,
     }
 
 
@@ -531,8 +585,8 @@ async def register(payload: RegisterIn, response: Response):
         if await c.fetchone():
             raise HTTPException(409, "Email ou pseudo déjà utilisé")
 
-    # Tier par défaut + invite code
-    tier = "free"
+    # Tier par défaut : trial (7 jours d'accès complet) — passe à 'free' à expiration
+    tier = "trial"
     invite_used = None
     if payload.invite_code:
         code = payload.invite_code.strip().upper()
@@ -551,15 +605,23 @@ async def register(payload: RegisterIn, response: Response):
     if INITIAL_ADMIN_EMAIL and payload.email == INITIAL_ADMIN_EMAIL:
         tier = "admin"
 
+    # Si trial, fixer les dates de début et fin
+    trial_start = trial_end = None
+    if tier == "trial":
+        trial_start = datetime.now()
+        trial_end = trial_start + timedelta(days=TRIAL_DURATION_DAYS)
+
     cursor = await db.execute(
-        "INSERT INTO users (email, username, password_hash, tier, invite_code_used) "
-        "VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO users (email, username, password_hash, tier, invite_code_used, "
+        "trial_started_at, trial_ends_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             payload.email,
             payload.username,
             hash_password(payload.password),
             tier,
             invite_used,
+            trial_start,
+            trial_end,
         ),
     )
     user_id = cursor.lastrowid
@@ -580,6 +642,7 @@ async def register(payload: RegisterIn, response: Response):
         "email": payload.email,
         "username": payload.username,
         "tier": tier,
+        "trial_ends_at": trial_end.isoformat() if trial_end else None,
     }
 
 
@@ -589,7 +652,7 @@ async def login(payload: LoginIn, response: Response):
     ident = payload.identifier.strip().lower()
 
     async with db.execute(
-        "SELECT id, email, username, password_hash, tier FROM users "
+        "SELECT id, email, username, password_hash, tier, trial_ends_at FROM users "
         "WHERE email = ? OR LOWER(username) = ?",
         (ident, ident),
     ) as c:
@@ -604,6 +667,7 @@ async def login(payload: LoginIn, response: Response):
         "email": row[1],
         "username": row[2],
         "tier": row[4],
+        "trial_ends_at": row[5],
     }
 
 
@@ -639,6 +703,19 @@ async def list_filters(user: dict = Depends(get_current_user)):
 async def create_filter(
     payload: FilterCreate, user: dict = Depends(get_current_user)
 ):
+    # ── Limite à 3 filtres pour le tier 'free' ──
+    if user["tier"] == "free":
+        async with app.state.db.execute(
+            "SELECT COUNT(*) FROM filters WHERE user_id = ?", (user["id"],)
+        ) as c:
+            count = (await c.fetchone())[0]
+        if count >= MAX_FILTERS_FREE:
+            raise HTTPException(
+                403,
+                f"Limite de {MAX_FILTERS_FREE} filtres atteinte. "
+                "Passe à l'offre Pro pour des filtres illimités.",
+            )
+
     url = payload.url
     if "order=newest_first" not in url:
         url += ("&" if "?" in url else "?") + "order=newest_first"
@@ -729,7 +806,7 @@ def _gen_code(length=10) -> str:
 
 
 @app.get("/api/admin/invites")
-async def list_invites(_: dict = Depends(require_admin)):
+async def list_invites(admin: dict = Depends(require_admin)):
     async with app.state.db.execute(
         "SELECT code, tier, note, used_by, used_at, created_at "
         "FROM invite_codes ORDER BY created_at DESC"
@@ -744,6 +821,8 @@ async def list_invites(_: dict = Depends(require_admin)):
             "used_at": r[4],
             "created_at": r[5],
             "is_used": r[3] is not None,
+            # Marqué manuellement = utilisé par l'admin lui-même
+            "marked_manually": r[3] == admin["id"],
         }
         for r in rows
     ]
@@ -779,6 +858,41 @@ async def delete_invite(code: str, _: dict = Depends(require_admin)):
     return {"status": "ok"}
 
 
+# ── Marquer un code comme "utilisé manuellement" (sans qu'un user l'ait saisi) ──
+@app.post("/api/admin/invites/{code}/mark-used")
+async def mark_invite_used(code: str, admin: dict = Depends(require_admin)):
+    """L'admin coche manuellement un code comme utilisé. Empêche sa réutilisation et son affichage clair."""
+    cursor = await app.state.db.execute(
+        "UPDATE invite_codes SET used_by = ?, used_at = ? "
+        "WHERE code = ? AND used_by IS NULL",
+        (admin["id"], datetime.now(), code),
+    )
+    await app.state.db.commit()
+    if cursor.rowcount == 0:
+        raise HTTPException(404, "Code introuvable ou déjà utilisé")
+    return {"status": "ok"}
+
+
+# ── Annuler le marquage manuel (rendre le code à nouveau disponible) ──
+@app.post("/api/admin/invites/{code}/unmark-used")
+async def unmark_invite_used(code: str, admin: dict = Depends(require_admin)):
+    """Annule le marquage manuel. On vérifie que le code n'a pas été utilisé par un autre user."""
+    async with app.state.db.execute(
+        "SELECT used_by FROM invite_codes WHERE code = ?", (code,)
+    ) as c:
+        row = await c.fetchone()
+    if not row:
+        raise HTTPException(404, "Code introuvable")
+    if row[0] != admin["id"]:
+        raise HTTPException(400, "Ce code a été utilisé par un utilisateur réel, impossible de l'annuler")
+    await app.state.db.execute(
+        "UPDATE invite_codes SET used_by = NULL, used_at = NULL WHERE code = ?",
+        (code,),
+    )
+    await app.state.db.commit()
+    return {"status": "ok"}
+
+
 # =============================================================================
 # WEBSOCKET
 # =============================================================================
@@ -805,10 +919,20 @@ async def websocket_endpoint(websocket: WebSocket):
 # =============================================================================
 @app.get("/")
 async def index():
-    return FileResponse("index.html")
+    return FileResponse("static/index.html")
 
 
-app.mount("/", StaticFiles(directory=".", html=True), name="static")
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Le navigateur demande /favicon.ico à la racine — on le sert directement."""
+    path = "static/favicon.ico"
+    if os.path.isfile(path):
+        return FileResponse(path, media_type="image/x-icon")
+    return FileResponse("static/logo.png", media_type="image/png")
+
+
+if os.path.isdir("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 if __name__ == "__main__":
