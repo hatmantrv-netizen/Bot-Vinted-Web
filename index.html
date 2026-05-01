@@ -3,1462 +3,966 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vinted Sniper</title>
+    <title>Vinted Sniper — Trouve les meilleures affaires avant tout le monde</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{
+        --bg:#0a0a14;--bg2:#11111d;--card:#16162a;--card2:#1c1c33;
+        --border:#25253d;--p:#09B0B0;--ph:#07d4d4;--ps:rgba(9,176,176,.12);--ps2:rgba(9,176,176,.06);
+        --txt:#e8e8f0;--muted:#8a8aa0;--danger:#ff5e5e;--ok:#4ade80;--warn:#fbbf24;--gold:#f5c451;
+    }
+    body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden}
+    button,input,select{font-family:inherit}
+    .hidden{display:none!important}
 
-        :root {
-            --bg: #0a0a14;
-            --bg-2: #11111d;
-            --card: #16162a;
-            --card-hover: #1c1c33;
-            --border: #25253d;
-            --primary: #09B0B0;
-            --primary-hover: #07d4d4;
-            --primary-soft: rgba(9, 176, 176, 0.12);
-            --text: #e8e8f0;
-            --muted: #8a8aa0;
-            --danger: #ff5e5e;
-            --success: #4ade80;
-            --warning: #fbbf24;
-            --gold: #f5c451;
-        }
+    /* ── LANDING ── */
+    #landing{min-height:100vh;display:flex;flex-direction:column;position:relative;overflow:hidden}
+    #landing::before{content:'';position:fixed;inset:0;
+        background-image:linear-gradient(rgba(9,176,176,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(9,176,176,.04) 1px,transparent 1px);
+        background-size:60px 60px;pointer-events:none;z-index:0}
+    #landing::after{content:'';position:fixed;inset:0;
+        background:radial-gradient(ellipse 70% 60% at 50% -10%,rgba(9,176,176,.14),transparent 65%);pointer-events:none;z-index:0}
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
+    .l-nav{display:flex;align-items:center;justify-content:space-between;padding:22px 48px;position:relative;z-index:10}
+    .l-nav-logo{display:flex;align-items:center;gap:11px}
+    .l-nav-logo img{width:36px;border-radius:8px;object-fit:contain}
+    .l-nav-logo span{font-size:16px;font-weight:800;letter-spacing:-.5px}
+    .l-nav-login{padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+        background:transparent;border:1px solid var(--border);color:var(--txt);transition:all .15s}
+    .l-nav-login:hover{border-color:var(--p);color:var(--p)}
 
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(9, 176, 176, 0.08), transparent 70%);
-            pointer-events: none;
-            z-index: 0;
-        }
+    .hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+        text-align:center;padding:60px 24px 40px;position:relative;z-index:10}
+    .hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--ps);border:1px solid rgba(9,176,176,.25);
+        color:var(--p);font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;margin-bottom:28px;letter-spacing:.3px}
+    .hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--p);animation:pulse 2s infinite}
+    .hero h1{font-size:clamp(36px,6vw,74px);font-weight:900;line-height:1.05;letter-spacing:-2.5px;max-width:820px;margin-bottom:20px}
+    .hero h1 .accent{color:var(--p)}
+    .hero-sub{font-size:17px;color:var(--muted);max-width:460px;line-height:1.6;margin-bottom:40px}
+    .hero-ctas{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:56px}
+    .cta-main{background:var(--p);color:white;border:none;padding:14px 28px;border-radius:10px;font-size:15px;
+        font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:10px;
+        box-shadow:0 4px 20px rgba(9,176,176,.3)}
+    .cta-main:hover{background:var(--ph);transform:translateY(-2px);box-shadow:0 8px 28px rgba(9,176,176,.4)}
+    .cta-trial{background:transparent;border:1px solid var(--border);color:var(--txt);padding:14px 28px;
+        border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s;position:relative}
+    .cta-trial:hover{border-color:var(--p);color:var(--p)}
+    .trial-tag{position:absolute;top:-10px;right:-10px;background:var(--gold);color:#1a1200;font-size:10px;
+        font-weight:800;padding:3px 8px;border-radius:8px;white-space:nowrap}
 
-        button { font-family: inherit; }
+    .feats{display:flex;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+        flex-wrap:wrap;position:relative;z-index:10}
+    .feat{display:flex;align-items:center;gap:12px;padding:26px 36px;border-right:1px solid var(--border);flex:1;min-width:180px}
+    .feat:last-child{border-right:none}
+    .feat-ico{width:40px;height:40px;background:var(--ps);border-radius:10px;display:flex;align-items:center;
+        justify-content:center;font-size:18px;flex-shrink:0}
+    .feat-txt strong{display:block;font-size:14px;font-weight:700;margin-bottom:3px}
+    .feat-txt span{font-size:12px;color:var(--muted)}
 
-        /* ================================ AUTH SCREEN ================================ */
-        .auth-screen {
-            position: fixed;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            background: var(--bg);
-            z-index: 50;
-        }
-        .auth-card {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 36px 32px;
-            width: 100%;
-            max-width: 420px;
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
-            position: relative;
-        }
-        .auth-logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-        .auth-logo .logo-icon {
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, var(--primary), #07a0a0);
-            border-radius: 11px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            box-shadow: 0 4px 14px rgba(9, 176, 176, 0.3);
-        }
-        .auth-logo h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
-        .auth-logo p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    /* ── AUTH ── */
+    #auth{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+        padding:20px;background:rgba(10,10,20,.96);backdrop-filter:blur(12px);z-index:80}
+    .auth-card{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:30px 26px;
+        width:100%;max-width:420px;box-shadow:0 25px 80px rgba(0,0,0,.6);position:relative}
+    .auth-back{position:absolute;top:14px;left:14px;background:none;border:none;color:var(--muted);
+        cursor:pointer;font-size:13px;padding:5px 9px;border-radius:6px;transition:all .12s;display:flex;align-items:center;gap:5px}
+    .auth-back:hover{color:var(--txt);background:var(--card)}
+    .auth-logo{display:flex;align-items:center;gap:11px;margin-bottom:20px;padding-top:6px}
+    .auth-logo img{width:34px;border-radius:7px}
+    .auth-logo h2{font-size:17px;font-weight:800;letter-spacing:-.5px}
+    .auth-logo p{font-size:11px;color:var(--muted)}
+    .a-tabs{display:flex;gap:4px;background:var(--card);padding:4px;border-radius:10px;margin-bottom:18px}
+    .a-tab{flex:1;padding:8px;background:transparent;border:none;color:var(--muted);font-size:13px;
+        font-weight:600;border-radius:7px;cursor:pointer;transition:all .12s}
+    .a-tab.on{background:var(--p);color:white}
+    .trial-info{background:var(--ps);border:1px solid rgba(9,176,176,.2);border-radius:8px;
+        padding:9px 13px;font-size:12px;color:var(--p);margin-bottom:14px;display:flex;align-items:center;gap:7px}
+    .fg{margin-bottom:13px}
+    .fg label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+        letter-spacing:.7px;margin-bottom:5px}
+    .fg input{width:100%;padding:10px 13px;background:var(--card);border:1px solid var(--border);
+        border-radius:8px;color:var(--txt);font-size:14px;transition:all .12s}
+    .fg input:focus{outline:none;border-color:var(--p);box-shadow:0 0 0 3px var(--ps)}
+    .fg .hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .a-err{background:rgba(255,94,94,.1);border:1px solid rgba(255,94,94,.3);color:var(--danger);
+        padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none}
+    .a-err.on{display:block}
+    .btn-full{width:100%;padding:11px 16px;border:none;border-radius:9px;font-weight:700;font-size:14px;
+        cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+    .btn-p{background:var(--p);color:white}
+    .btn-p:hover{background:var(--ph);transform:translateY(-1px)}
+    .btn-p:disabled{opacity:.6;cursor:not-allowed;transform:none}
+    .btn-g{background:transparent;border:1px solid var(--border);color:var(--txt)}
+    .btn-g:hover{border-color:var(--p)}
 
-        .auth-tabs {
-            display: flex;
-            gap: 4px;
-            background: var(--card);
-            padding: 4px;
-            border-radius: 10px;
-            margin-bottom: 22px;
-        }
-        .auth-tab {
-            flex: 1;
-            padding: 9px 12px;
-            background: transparent;
-            border: none;
-            color: var(--muted);
-            font-size: 13px;
-            font-weight: 600;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-        .auth-tab.active {
-            background: var(--primary);
-            color: white;
-        }
+    /* ── SETUP ── */
+    #setup{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+        padding:20px;background:rgba(10,10,20,.97);z-index:80}
+    .setup-card{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:30px 26px;
+        width:100%;max-width:480px;box-shadow:0 25px 80px rgba(0,0,0,.6)}
+    .setup-hd{text-align:center;margin-bottom:22px}
+    .setup-hd .ico{font-size:38px;margin-bottom:10px}
+    .setup-hd h2{font-size:21px;font-weight:800;letter-spacing:-.5px;margin-bottom:7px}
+    .setup-hd p{color:var(--muted);font-size:13px;line-height:1.5}
+    .def-label{display:flex;align-items:center;gap:10px;font-size:10px;font-weight:700;
+        text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:11px}
+    .def-label::before,.def-label::after{content:'';flex:1;height:1px;background:var(--border)}
+    .fc-item{display:flex;align-items:center;gap:13px;padding:13px 15px;background:var(--card);
+        border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;
+        transition:all .12s;user-select:none}
+    .fc-item:hover{border-color:var(--p);background:var(--card2)}
+    .fc-item.on{border-color:var(--p);background:var(--ps2)}
+    .fc-box{width:20px;height:20px;border:2px solid var(--border);border-radius:5px;flex-shrink:0;
+        display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .12s}
+    .fc-item.on .fc-box{background:var(--p);border-color:var(--p);color:white}
+    .fc-info{flex:1}
+    .fc-name{font-size:14px;font-weight:600}
+    .fc-detail{font-size:12px;color:var(--muted);margin-top:1px}
+    .fc-price{font-size:12px;font-weight:700;color:var(--p);background:var(--ps);padding:3px 9px;border-radius:5px}
+    .setup-skip{text-align:center;margin-top:10px;font-size:13px;color:var(--muted)}
+    .setup-skip button{background:none;border:none;color:var(--muted);cursor:pointer;text-decoration:underline;font-size:13px}
+    .setup-skip button:hover{color:var(--txt)}
 
-        .form-group { margin-bottom: 14px; }
-        .form-group label {
-            display: block;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--muted);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 11px 14px;
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 9px;
-            color: var(--text);
-            font-family: inherit;
-            font-size: 14px;
-            transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px var(--primary-soft);
-        }
-        .form-group .hint {
-            font-size: 11px;
-            color: var(--muted);
-            margin-top: 4px;
-        }
+    /* ── APP ── */
+    .app{display:grid;grid-template-columns:268px 1fr;min-height:100vh;position:relative;z-index:1}
+    .sb{background:var(--bg2);border-right:1px solid var(--border);padding:16px 11px;
+        display:flex;flex-direction:column;gap:14px;position:sticky;top:0;height:100vh;overflow-y:auto}
+    .sb-logo{display:flex;align-items:center;gap:10px;padding:3px 7px 14px;border-bottom:1px solid var(--border)}
+    .sb-logo img{width:30px;border-radius:7px}
+    .sb-logo h1{font-size:14px;font-weight:800;letter-spacing:-.5px}
+    .sb-logo p{font-size:10px;color:var(--muted)}
+    .nav-sec{display:flex;flex-direction:column;gap:2px}
+    .nav-sec-ttl{font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:1.2px;
+        font-weight:700;padding:5px 8px 3px;display:flex;justify-content:space-between;align-items:center}
+    .add-btn{background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;
+        padding:2px 5px;border-radius:4px;transition:all .12s;line-height:1}
+    .add-btn:hover{color:var(--p);background:var(--ps)}
+    .ni{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;
+        font-size:13px;font-weight:500;color:var(--txt);transition:all .12s;border:1px solid transparent;user-select:none}
+    .ni:hover{background:var(--card)}
+    .ni.on{background:var(--ps);color:var(--p);border-color:rgba(9,176,176,.25)}
+    .ni .ico{font-size:13px;width:16px;text-align:center;flex-shrink:0}
+    .ni .lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ni .bdg{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--card);color:var(--muted);min-width:20px;text-align:center}
+    .ni.on .bdg{background:var(--p);color:white}
+    .ni .dx{opacity:0;background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 4px;font-size:12px;border-radius:3px;transition:all .12s}
+    .ni:hover .dx{opacity:1}
+    .ni .dx:hover{color:var(--danger)}
+    .ni.locked{cursor:not-allowed;opacity:.38}
+    .ni.locked:hover{background:transparent}
+    .empty-nav{padding:6px 9px;color:var(--muted);font-size:11.5px;font-style:italic}
+    .sb-foot{margin-top:auto;padding-top:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+    .u-pill{display:flex;align-items:center;gap:9px;padding:8px 9px;background:var(--card);border-radius:9px}
+    .u-av{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--p),#07a0a0);
+        display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:12px;flex-shrink:0}
+    .u-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .u-tier{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+    .u-tier.accompaniment{color:var(--gold)}.u-tier.pro{color:var(--p)}.u-tier.admin{color:var(--danger)}
+    .st-row{display:flex;align-items:center;gap:7px;padding:5px 9px;font-size:11px;color:var(--muted)}
+    .st-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+    .st-dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(74,222,128,.15);animation:pulse 2s infinite}
+    .st-dot.off{background:var(--danger)}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    .sb-act{display:flex;align-items:center;gap:8px;padding:7px 9px;font-size:12px;font-weight:500;
+        border-radius:7px;cursor:pointer;transition:all .12s;background:none;border:1px solid var(--border);color:var(--muted);text-align:left}
+    .sb-act:hover{color:var(--txt);border-color:var(--p)}
+    .sb-act.red:hover{color:var(--danger);border-color:var(--danger)}
 
-        .auth-error {
-            background: rgba(255, 94, 94, 0.1);
-            border: 1px solid rgba(255, 94, 94, 0.3);
-            color: var(--danger);
-            padding: 10px 12px;
-            border-radius: 8px;
-            font-size: 13px;
-            margin-bottom: 14px;
-            display: none;
-        }
-        .auth-error.show { display: block; }
+    /* ── MAIN ── */
+    .main{padding:26px 34px;min-width:0}
+    .pg-hd{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px;gap:20px;flex-wrap:wrap}
+    .pg-ttl h2{font-size:24px;font-weight:800;letter-spacing:-.7px}
+    .pg-ttl p{color:var(--muted);font-size:13px;margin-top:3px}
+    .stats{display:flex;gap:10px}
+    .stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 13px;min-width:78px}
+    .stat-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700}
+    .stat-v{font-size:19px;font-weight:800;margin-top:2px;color:var(--p)}
 
-        .btn {
-            width: 100%;
-            padding: 11px 16px;
-            border: none;
-            border-radius: 9px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.15s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(9, 176, 176, 0.3); }
-        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
-        .btn-secondary:hover { background: var(--card); border-color: var(--primary); }
-        .btn-danger { background: transparent; border: 1px solid var(--border); color: var(--danger); }
-        .btn-danger:hover { background: rgba(255, 94, 94, 0.1); border-color: var(--danger); }
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:13px;overflow:hidden;
+        display:flex;flex-direction:column;transition:all .2s;animation:fadeUp .4s ease-out}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    .card.new{box-shadow:0 0 0 2px var(--p),0 8px 28px rgba(9,176,176,.2);animation:newCard .5s ease-out}
+    @keyframes newCard{0%{transform:scale(.95);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
+    .card:hover{border-color:var(--p);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+    .c-img-w{position:relative;aspect-ratio:1/1.1;background:var(--bg);overflow:hidden}
+    .c-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .4s}
+    .card:hover .c-img{transform:scale(1.05)}
+    .c-thumbs{position:absolute;bottom:8px;left:0;right:0;display:flex;gap:4px;justify-content:center;
+        opacity:0;transition:opacity .2s}
+    .card:hover .c-thumbs{opacity:1}
+    .c-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.4);transition:all .15s}
+    .c-dot.on{background:white;width:16px;border-radius:3px}
+    .new-pill{position:absolute;top:9px;left:9px;background:var(--p);color:white;font-size:10px;
+        font-weight:800;padding:3px 8px;border-radius:6px;text-transform:uppercase;box-shadow:0 2px 8px rgba(9,176,176,.4)}
+    .f-pill{position:absolute;top:9px;right:9px;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
+        color:white;font-size:11px;font-weight:500;padding:3px 9px;border-radius:5px;max-width:55%;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .c-body{padding:12px;display:flex;flex-direction:column;gap:8px;flex:1}
+    .c-title{font-size:13px;font-weight:600;line-height:1.35;display:-webkit-box;
+        -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:35px}
+    .c-tags{display:flex;flex-wrap:wrap;gap:5px}
+    .tag{background:var(--bg2);border:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:500;padding:2px 7px;border-radius:5px}
+    .tag.br{color:var(--txt)}
+    .c-seller{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+    .s-nm{color:var(--txt);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
+    .stars{color:var(--warn);font-size:11px}
+    .c-price-row{display:flex;align-items:flex-end;justify-content:space-between;
+        padding-top:8px;border-top:1px dashed var(--border);margin-top:auto}
+    .pm{font-size:17px;font-weight:800;line-height:1.1}
+    .pttc{font-size:11px;color:var(--muted);margin-top:2px}
+    .cage{font-size:11px;color:var(--muted)}
+    .c-btns{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:0 12px 12px}
+    .cb{padding:7px;border-radius:7px;text-decoration:none;font-size:12px;font-weight:600;text-align:center;
+        transition:all .15s;border:1px solid var(--border);color:var(--txt);background:var(--bg2)}
+    .cb:hover{border-color:var(--p);color:var(--p)}
+    .cb.p{background:var(--p);border-color:var(--p);color:white}
+    .cb.p:hover{background:var(--ph)}
 
-        /* ================================ APP ================================ */
-        .app {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            min-height: 100vh;
-            position: relative;
-            z-index: 1;
-        }
+    .empty{text-align:center;padding:80px 20px;color:var(--muted)}
+    .empty .ei{font-size:42px;margin-bottom:12px;opacity:.5}
+    .empty h3{font-size:17px;color:var(--txt);margin-bottom:7px}
 
-        /* SIDEBAR */
-        .sidebar {
-            background: var(--bg-2);
-            border-right: 1px solid var(--border);
-            padding: 20px 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-            position: sticky;
-            top: 0;
-            height: 100vh;
-            overflow-y: auto;
-        }
+    /* COMING SOON */
+    .coming{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center}
+    .coming-ico{width:78px;height:78px;background:var(--card);border:2px dashed var(--border);border-radius:20px;
+        display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:18px}
+    .coming h3{font-size:22px;font-weight:800;margin-bottom:9px}
+    .coming p{color:var(--muted);max-width:380px;line-height:1.5;font-size:14px;margin-bottom:18px}
+    .coming-tag{display:inline-block;background:var(--gold);color:#1a1200;font-size:11px;font-weight:800;
+        padding:5px 13px;border-radius:7px;text-transform:uppercase;letter-spacing:1px}
 
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 4px 10px 16px;
-            border-bottom: 1px solid var(--border);
-        }
-        .logo .logo-icon {
-            width: 38px;
-            height: 38px;
-            background: linear-gradient(135deg, var(--primary), #07a0a0);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 19px;
-            box-shadow: 0 4px 14px rgba(9, 176, 176, 0.3);
-        }
-        .logo h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.5px; }
-        .logo p { font-size: 11px; color: var(--muted); }
+    /* PAYMENT */
+    .pay-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:22px}
+    .plan-card{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:22px;position:relative}
+    .plan-card.feat{border-color:var(--p);background:var(--ps2)}
+    .plan-badge{position:absolute;top:-9px;right:18px;background:var(--p);color:white;font-size:10px;
+        font-weight:800;padding:3px 9px;border-radius:5px;text-transform:uppercase}
+    .plan-name{font-size:15px;font-weight:800;margin-bottom:3px}
+    .plan-price{font-size:30px;font-weight:900;color:var(--p);letter-spacing:-1px;margin:10px 0 3px}
+    .plan-price span{font-size:13px;color:var(--muted);font-weight:500}
+    .plan-desc{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+    .plan-feats{list-style:none;display:flex;flex-direction:column;gap:7px;margin-bottom:18px}
+    .plan-feats li{font-size:12px;display:flex;align-items:center;gap:7px}
+    .plan-feats li::before{content:'✓';color:var(--p);font-weight:800}
+    .plan-feats li.no::before{content:'✕';color:var(--muted)}
+    .plan-feats li.no{color:var(--muted)}
+    .plan-btn{width:100%;padding:10px;border-radius:8px;font-weight:700;font-size:13px;cursor:not-allowed;
+        border:1px solid var(--border);background:var(--bg2);color:var(--muted);display:flex;align-items:center;justify-content:center;gap:7px}
+    .plan-card.feat .plan-btn{background:var(--p);border-color:var(--p);color:white}
+    .pay-soon{margin-top:26px;background:var(--card);border:1px solid var(--border);border-radius:12px;
+        padding:18px 22px;display:flex;align-items:center;gap:14px}
+    .pay-soon .ps-ico{font-size:26px}
+    .pay-soon h4{font-weight:700;font-size:14px;margin-bottom:3px}
+    .pay-soon p{font-size:12px;color:var(--muted);line-height:1.5}
 
-        .nav-section {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-        .nav-section-title {
-            font-size: 10px;
-            text-transform: uppercase;
-            color: var(--muted);
-            letter-spacing: 1.2px;
-            font-weight: 700;
-            padding: 6px 10px 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .add-btn {
-            background: none;
-            border: none;
-            color: var(--muted);
-            font-size: 14px;
-            cursor: pointer;
-            padding: 2px 4px;
-            border-radius: 4px;
-            transition: all 0.15s;
-        }
-        .add-btn:hover { color: var(--primary); background: var(--primary-soft); }
+    /* ADMIN */
+    .adm-sec{margin-bottom:28px}
+    .adm-sec h3{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .inv-form{display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end;background:var(--card);
+        border:1px solid var(--border);border-radius:11px;padding:18px;margin-bottom:16px}
+    .inv-f{display:flex;flex-direction:column;gap:4px}
+    .inv-f label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+    .inv-f input,.inv-f select{padding:8px 11px;background:var(--bg2);border:1px solid var(--border);
+        border-radius:7px;color:var(--txt);font-size:13px}
+    .inv-f input:focus,.inv-f select:focus{outline:none;border-color:var(--p)}
+    .inv-gen{padding:9px 16px;background:var(--p);border:none;border-radius:7px;color:white;
+        font-weight:700;font-size:13px;cursor:pointer;transition:all .12s;align-self:flex-end}
+    .inv-gen:hover{background:var(--ph)}
+    .codes-box{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:12px;display:none}
+    .codes-box.on{display:block}
+    .codes-box h4{font-size:12px;font-weight:700;color:var(--p);margin-bottom:9px}
+    .code-pill{display:inline-flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border);
+        border-radius:6px;padding:5px 11px;font-family:monospace;font-size:14px;font-weight:700;
+        letter-spacing:1px;margin:3px;cursor:pointer;transition:all .12s}
+    .code-pill:hover{border-color:var(--p);color:var(--p)}
+    .code-pill .cc{font-size:11px;color:var(--muted)}
+    .inv-table{width:100%;border-collapse:collapse;font-size:13px}
+    .inv-table th{text-align:left;padding:7px 11px;font-size:10px;text-transform:uppercase;
+        letter-spacing:.8px;color:var(--muted);font-weight:700;border-bottom:1px solid var(--border)}
+    .inv-table td{padding:9px 11px;border-bottom:1px solid var(--border)}
+    .inv-table tr:last-child td{border-bottom:none}
+    .bt{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;text-transform:uppercase;letter-spacing:.5px}
+    .bt.accompaniment{background:rgba(245,196,81,.15);color:var(--gold)}
+    .bt.pro{background:var(--ps);color:var(--p)}
+    .bt.free{background:var(--card);color:var(--muted)}
 
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13.5px;
-            font-weight: 500;
-            color: var(--text);
-            transition: all 0.12s;
-            border: 1px solid transparent;
-            position: relative;
-        }
-        .nav-item:hover { background: var(--card); }
-        .nav-item.active {
-            background: var(--primary-soft);
-            color: var(--primary);
-            border-color: rgba(9, 176, 176, 0.3);
-        }
-        .nav-item .icon {
-            font-size: 14px;
-            width: 18px;
-            text-align: center;
-        }
-        .nav-item .label {
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .nav-item .count {
-            font-size: 11px;
-            color: var(--muted);
-            background: var(--bg-2);
-            padding: 1px 6px;
-            border-radius: 10px;
-            font-weight: 600;
-        }
-        .nav-item.active .count {
-            background: var(--primary);
-            color: white;
-        }
-        .nav-item .delete-x {
-            opacity: 0;
-            color: var(--muted);
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 2px 4px;
-            font-size: 13px;
-            transition: all 0.12s;
-            border-radius: 4px;
-        }
-        .nav-item:hover .delete-x { opacity: 1; }
-        .nav-item .delete-x:hover { color: var(--danger); background: rgba(255, 94, 94, 0.1); }
+    /* MODAL */
+    .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:none;
+        align-items:center;justify-content:center;z-index:200;padding:20px}
+    .modal-ov.on{display:flex}
+    .modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:15px;padding:24px;
+        width:100%;max-width:450px;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:pop .2s ease-out}
+    @keyframes pop{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+    .modal-box h3{font-size:18px;font-weight:800;margin-bottom:4px}
+    .modal-box>p{color:var(--muted);font-size:13px;margin-bottom:16px}
+    .m-acts{display:flex;gap:8px;margin-top:18px}
+    .m-acts .btn-full{flex:1}
 
-        .nav-item.locked {
-            cursor: not-allowed;
-            opacity: 0.45;
-        }
-        .nav-item.locked:hover { background: transparent; }
-        .nav-item.locked .lock {
-            margin-left: auto;
-            font-size: 10px;
-            color: var(--gold);
-        }
+    /* TOASTS */
+    .toasts{position:fixed;top:18px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:999;pointer-events:none}
+    .toast{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--p);
+        border-radius:10px;padding:10px 13px;min-width:250px;max-width:330px;display:flex;align-items:center;
+        gap:10px;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:toastIn .3s ease-out;pointer-events:auto}
+    @keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+    .toast.out{animation:toastOut .3s ease-in forwards}
+    @keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+    .t-ico{font-size:18px}
+    .t-ttl{font-size:13px;font-weight:700}
+    .t-msg{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-        .empty-section {
-            padding: 8px 10px;
-            color: var(--muted);
-            font-size: 11.5px;
-            font-style: italic;
-        }
+    /* TUTORIAL */
+    #tut{position:fixed;inset:0;z-index:500;pointer-events:none;display:none}
+    #tut.on{pointer-events:auto;display:block}
+    .tut-bg{position:absolute;inset:0;background:rgba(0,0,0,.78);z-index:500;pointer-events:auto}
+    .tut-spot{position:absolute;border-radius:10px;background:transparent;
+        box-shadow:0 0 0 9999px rgba(0,0,0,.5),0 0 0 3px var(--p),0 0 20px rgba(9,176,176,.4);
+        transition:left .4s cubic-bezier(.34,1.56,.64,1),top .4s cubic-bezier(.34,1.56,.64,1),width .4s,height .4s;
+        pointer-events:none;z-index:502}
+    .tut-card{position:absolute;background:var(--bg2);border:1px solid var(--p);border-radius:13px;
+        padding:18px 20px;width:290px;box-shadow:0 16px 40px rgba(0,0,0,.7);z-index:503;pointer-events:auto}
+    .tut-step{font-size:10px;font-weight:700;color:var(--p);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
+    .tut-ttl{font-size:15px;font-weight:800;margin-bottom:7px;letter-spacing:-.3px}
+    .tut-txt{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:16px}
+    .tut-acts{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .tut-dots{display:flex;gap:5px}
+    .tut-dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:all .2s}
+    .tut-dot.on{background:var(--p);width:15px;border-radius:3px}
+    .tut-btns{display:flex;gap:7px}
+    .tut-btn{padding:7px 12px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;transition:all .12s;border:none}
+    .tut-btn.sk{background:var(--card);color:var(--muted)}
+    .tut-btn.sk:hover{color:var(--txt)}
+    .tut-btn.nx{background:var(--p);color:white}
+    .tut-btn.nx:hover{background:var(--ph)}
 
-        .sidebar-footer {
-            margin-top: auto;
-            padding-top: 12px;
-            border-top: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .user-pill {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 10px;
-            background: var(--card);
-            border-radius: 9px;
-            font-size: 12px;
-        }
-        .user-avatar {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), #07a0a0);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 13px;
-            flex-shrink: 0;
-        }
-        .user-info { flex: 1; min-width: 0; }
-        .user-name {
-            font-weight: 600;
-            font-size: 13px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .user-tier {
-            font-size: 10px;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            font-weight: 600;
-        }
-        .user-tier.accompaniment { color: var(--gold); }
-        .user-tier.pro { color: var(--primary); }
-        .user-tier.admin { color: var(--danger); }
-
-        .status-pill {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 10px;
-            font-size: 11px;
-            color: var(--muted);
-        }
-        .status-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--muted);
-        }
-        .status-dot.connected {
-            background: var(--success);
-            box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
-            animation: pulse 2s infinite;
-        }
-        .status-dot.disconnected { background: var(--danger); }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        .small-btn {
-            padding: 7px 10px;
-            font-size: 12px;
-            border-radius: 7px;
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--muted);
-            cursor: pointer;
-            transition: all 0.15s;
-            text-align: left;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .small-btn:hover { color: var(--text); border-color: var(--primary); }
-        .small-btn.danger:hover { color: var(--danger); border-color: var(--danger); }
-
-        /* MAIN */
-        .main { padding: 28px 32px; min-width: 0; }
-
-        .main-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-bottom: 24px;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-        .main-title h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.7px; }
-        .main-title p { color: var(--muted); font-size: 13px; margin-top: 4px; }
-
-        .stats-row { display: flex; gap: 12px; }
-        .stat {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 8px 14px;
-            min-width: 90px;
-        }
-        .stat-label {
-            font-size: 10px;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            font-weight: 600;
-        }
-        .stat-value {
-            font-size: 20px;
-            font-weight: 700;
-            margin-top: 2px;
-            color: var(--primary);
-        }
-
-        .items-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 18px;
-        }
-
-        .item-card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            overflow: hidden;
-            transition: all 0.2s;
-            display: flex;
-            flex-direction: column;
-            animation: slideIn 0.4s ease-out;
-        }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .item-card.new {
-            box-shadow: 0 0 0 2px var(--primary), 0 8px 28px rgba(9, 176, 176, 0.2);
-            animation: newFlash 0.6s ease-out;
-        }
-        @keyframes newFlash {
-            0% { transform: scale(0.95); opacity: 0; }
-            50% { transform: scale(1.02); }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        .item-card:hover {
-            border-color: var(--primary);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-        }
-
-        .item-image-wrap {
-            position: relative;
-            aspect-ratio: 1 / 1.1;
-            background: var(--bg);
-            overflow: hidden;
-        }
-        .item-image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            transition: transform 0.4s;
-        }
-        .item-card:hover .item-image { transform: scale(1.05); }
-
-        .item-thumbs {
-            position: absolute;
-            bottom: 8px;
-            left: 8px;
-            right: 8px;
-            display: flex;
-            gap: 4px;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-        .item-card:hover .item-thumbs { opacity: 1; }
-        .item-thumb-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.4);
-            transition: all 0.15s;
-        }
-        .item-thumb-dot.active { background: white; width: 18px; border-radius: 3px; }
-
-        .new-badge {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: var(--primary);
-            color: white;
-            font-size: 10px;
-            font-weight: 700;
-            padding: 4px 8px;
-            border-radius: 6px;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            box-shadow: 0 2px 8px rgba(9, 176, 176, 0.4);
-        }
-        .filter-badge {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(8px);
-            color: white;
-            font-size: 11px;
-            font-weight: 500;
-            padding: 4px 10px;
-            border-radius: 6px;
-            max-width: 60%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .item-body {
-            padding: 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            flex: 1;
-        }
-        .item-title {
-            font-size: 14px;
-            font-weight: 600;
-            line-height: 1.35;
-            color: var(--text);
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            min-height: 38px;
-        }
-        .item-meta { display: flex; flex-wrap: wrap; gap: 6px; }
-        .meta-tag {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            color: var(--muted);
-            font-size: 11px;
-            font-weight: 500;
-            padding: 3px 8px;
-            border-radius: 5px;
-        }
-        .meta-tag.brand { color: var(--text); }
-
-        .seller-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 12px;
-        }
-        .seller-info {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--muted);
-            overflow: hidden;
-        }
-        .seller-name {
-            color: var(--text);
-            font-weight: 500;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 110px;
-        }
-        .stars { color: var(--warning); font-size: 11px; letter-spacing: 1px; }
-        .feedback-count { color: var(--muted); font-size: 11px; }
-
-        .item-price-row {
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-between;
-            gap: 8px;
-            padding-top: 4px;
-            border-top: 1px dashed var(--border);
-            margin-top: auto;
-        }
-        .price-block .price-main {
-            font-size: 18px;
-            font-weight: 800;
-            color: var(--text);
-            line-height: 1.1;
-        }
-        .price-block .price-ttc {
-            font-size: 11px;
-            color: var(--muted);
-            margin-top: 2px;
-        }
-        .item-time {
-            font-size: 11px;
-            color: var(--muted);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .item-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            padding: 0 14px 14px;
-        }
-        .item-btn {
-            padding: 8px 10px;
-            border-radius: 7px;
-            text-decoration: none;
-            font-size: 12px;
-            font-weight: 600;
-            text-align: center;
-            transition: all 0.15s;
-            border: 1px solid var(--border);
-            color: var(--text);
-            background: var(--bg-2);
-        }
-        .item-btn:hover { border-color: var(--primary); color: var(--primary); }
-        .item-btn.primary { background: var(--primary); border-color: var(--primary); color: white; }
-        .item-btn.primary:hover { background: var(--primary-hover); color: white; }
-
-        /* COMING SOON PLACEHOLDER */
-        .coming-soon {
-            text-align: center;
-            padding: 80px 20px;
-            color: var(--muted);
-        }
-        .coming-soon-icon {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 20px;
-            background: var(--card);
-            border: 2px dashed var(--border);
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 36px;
-        }
-        .coming-soon h3 {
-            font-size: 22px;
-            color: var(--text);
-            margin-bottom: 10px;
-            font-weight: 700;
-        }
-        .coming-soon p { font-size: 14px; max-width: 380px; margin: 0 auto; line-height: 1.5; }
-        .coming-soon-badge {
-            display: inline-block;
-            margin-top: 16px;
-            background: var(--gold);
-            color: #1a1407;
-            font-size: 11px;
-            font-weight: 700;
-            padding: 5px 12px;
-            border-radius: 6px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        .feed-empty {
-            text-align: center;
-            padding: 80px 20px;
-            color: var(--muted);
-        }
-        .feed-empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
-        .feed-empty h3 { font-size: 18px; color: var(--text); margin-bottom: 8px; }
-
-        /* MODAL */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(8px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            padding: 20px;
-        }
-        .modal-overlay.show { display: flex; }
-        .modal {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 28px;
-            width: 100%;
-            max-width: 480px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            animation: modalIn 0.2s ease-out;
-        }
-        @keyframes modalIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .modal h3 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
-        .modal > p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
-        .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
-        .modal-actions .btn { flex: 1; }
-
-        /* TOAST */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 200;
-            pointer-events: none;
-        }
-        .toast {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-left: 3px solid var(--primary);
-            border-radius: 10px;
-            padding: 12px 16px;
-            min-width: 280px;
-            max-width: 360px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-            animation: toastIn 0.3s ease-out;
-            pointer-events: auto;
-        }
-        @keyframes toastIn {
-            from { opacity: 0; transform: translateX(40px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-        .toast.fade { animation: toastOut 0.3s ease-in forwards; }
-        @keyframes toastOut { to { opacity: 0; transform: translateX(40px); } }
-        .toast-icon { font-size: 20px; }
-        .toast-content { flex: 1; min-width: 0; }
-        .toast-title { font-size: 13px; font-weight: 600; }
-        .toast-msg {
-            font-size: 12px;
-            color: var(--muted);
-            margin-top: 2px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        /* RESPONSIVE */
-        @media (max-width: 900px) {
-            .app { grid-template-columns: 1fr; }
-            .sidebar {
-                position: relative;
-                height: auto;
-                max-height: none;
-            }
-            .main { padding: 20px; }
-        }
-
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-
-        .hidden { display: none !important; }
+    @media(max-width:900px){
+        .app{grid-template-columns:1fr}
+        .sb{position:relative;height:auto}
+        .main{padding:18px}
+        .l-nav{padding:18px 22px}
+        .feat{border-right:none;border-bottom:1px solid var(--border)}
+        .feat:last-child{border-bottom:none}
+    }
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
     </style>
 </head>
 <body>
 
-<!-- ================================ AUTH SCREEN ================================ -->
-<div class="auth-screen" id="auth-screen">
+<!-- ══ LANDING ══ -->
+<div id="landing">
+    <nav class="l-nav">
+        <div class="l-nav-logo">
+            <img src="/static/logo.png" alt="Vinted Sniper">
+            <span>Vinted Sniper</span>
+        </div>
+        <button class="l-nav-login" onclick="showAuth('login')">Se connecter →</button>
+    </nav>
+    <section class="hero">
+        <div class="hero-badge"><span class="dot"></span>Scanner actif 24h/24</div>
+        <h1>Trouve les meilleures<br>affaires <span class="accent">Vinted.</span><br>Avant tout le monde.</h1>
+        <p class="hero-sub">Configure tes filtres une fois. Le bot tourne non-stop et t'alerte dès qu'une bonne affaire apparaît — avant que quelqu'un d'autre ne la prenne.</p>
+        <div class="hero-ctas">
+            <button class="cta-main" onclick="showAuth('register',true)">🚀 Commencer gratuitement</button>
+            <button class="cta-trial" onclick="showAuth('register',true)">
+                Essayer pendant 7 jours
+                <span class="trial-tag">GRATUIT</span>
+            </button>
+        </div>
+    </section>
+    <div class="feats">
+        <div class="feat"><div class="feat-ico">⚡</div><div class="feat-txt"><strong>Alertes instantanées</strong><span>Scan toutes les 30 secondes</span></div></div>
+        <div class="feat"><div class="feat-ico">🎯</div><div class="feat-txt"><strong>Filtres personnalisés</strong><span>Tes critères, ton prix max</span></div></div>
+        <div class="feat"><div class="feat-ico">📊</div><div class="feat-txt"><strong>Prix TTC calculé</strong><span>Marge visible au premier coup d'œil</span></div></div>
+        <div class="feat"><div class="feat-ico">📱</div><div class="feat-txt"><strong>100% web</strong><span>Aucune installation requise</span></div></div>
+    </div>
+</div>
+
+<!-- ══ AUTH ══ -->
+<div id="auth" class="hidden">
     <div class="auth-card">
+        <button class="auth-back" onclick="showLanding()">← Retour</button>
         <div class="auth-logo">
-            <div class="logo-icon">🛒</div>
-            <div>
-                <h1>Vinted Sniper</h1>
-                <p>Surveillance temps réel</p>
-            </div>
+            <img src="/static/logo.png" alt="">
+            <div><h2>Vinted Sniper</h2><p>Surveillance temps réel</p></div>
         </div>
-
-        <div class="auth-tabs">
-            <button class="auth-tab active" data-tab="login" onclick="switchAuthTab('login')">Connexion</button>
-            <button class="auth-tab" data-tab="register" onclick="switchAuthTab('register')">Créer un compte</button>
+        <div class="a-tabs">
+            <button class="a-tab on" data-tab="login" onclick="switchTab('login')">Connexion</button>
+            <button class="a-tab" data-tab="register" onclick="switchTab('register')">Créer un compte</button>
         </div>
-
-        <div class="auth-error" id="auth-error"></div>
-
-        <!-- LOGIN -->
-        <form id="login-form" onsubmit="doLogin(event)">
-            <div class="form-group">
-                <label>Email ou pseudo</label>
-                <input type="text" id="login-id" required autocomplete="username">
-            </div>
-            <div class="form-group">
-                <label>Mot de passe</label>
-                <input type="password" id="login-pw" required autocomplete="current-password">
-            </div>
-            <button type="submit" class="btn btn-primary" id="login-btn">Se connecter</button>
+        <div class="trial-info hidden" id="trial-banner">🎁 7 jours d'accès complet gratuit — aucune carte requise</div>
+        <div class="a-err" id="aerr"></div>
+        <form id="lform" onsubmit="doLogin(event)">
+            <div class="fg"><label>Email ou pseudo</label><input type="text" id="lid" required autocomplete="username" placeholder="ton@email.com"></div>
+            <div class="fg"><label>Mot de passe</label><input type="password" id="lpw" required autocomplete="current-password"></div>
+            <button type="submit" class="btn-full btn-p" id="lbtn">Se connecter</button>
         </form>
-
-        <!-- REGISTER -->
-        <form id="register-form" class="hidden" onsubmit="doRegister(event)">
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" id="reg-email" required autocomplete="email">
-            </div>
-            <div class="form-group">
-                <label>Pseudo</label>
-                <input type="text" id="reg-username" required autocomplete="username" pattern="[a-zA-Z0-9_\-\.]{3,24}">
-                <div class="hint">3 à 24 caractères, lettres / chiffres / _ - .</div>
-            </div>
-            <div class="form-group">
-                <label>Mot de passe</label>
-                <input type="password" id="reg-pw" required autocomplete="new-password" minlength="8">
-                <div class="hint">8 caractères minimum</div>
-            </div>
-            <div class="form-group">
-                <label>Code d'invitation <span style="text-transform:none; font-weight:500; color: var(--muted)">(optionnel)</span></label>
-                <input type="text" id="reg-invite" autocomplete="off" placeholder="Ex: ABCD123456">
-                <div class="hint">Si tu fais partie de l'accompagnement, saisis ton code ici.</div>
-            </div>
-            <button type="submit" class="btn btn-primary" id="register-btn">Créer mon compte</button>
+        <form id="rform" class="hidden" onsubmit="doRegister(event)">
+            <div class="fg"><label>Email</label><input type="email" id="remail" required autocomplete="email"></div>
+            <div class="fg"><label>Pseudo</label><input type="text" id="runame" required pattern="[a-zA-Z0-9_\-\.]{3,24}" autocomplete="username"><div class="hint">3-24 caractères · lettres, chiffres, _ - .</div></div>
+            <div class="fg"><label>Mot de passe</label><input type="password" id="rpw" required minlength="8" autocomplete="new-password"><div class="hint">8 caractères minimum</div></div>
+            <div class="fg"><label>Code d'invitation <em style="font-weight:400;color:var(--muted);font-style:normal">(optionnel)</em></label><input type="text" id="rinvite" autocomplete="off" placeholder="Ex: K9X4M2P7QA" style="text-transform:uppercase"><div class="hint">Membres de l'accompagnement uniquement</div></div>
+            <button type="submit" class="btn-full btn-p" id="rbtn">Créer mon compte</button>
         </form>
     </div>
 </div>
 
-<!-- ================================ APP ================================ -->
-<div class="app hidden" id="app-screen">
-    <!-- SIDEBAR -->
-    <aside class="sidebar">
-        <div class="logo">
-            <div class="logo-icon">🛒</div>
-            <div>
-                <h1>Vinted Sniper</h1>
-                <p>Surveillance temps réel</p>
-            </div>
+<!-- ══ SETUP ══ -->
+<div id="setup" class="hidden">
+    <div class="setup-card">
+        <div class="setup-hd">
+            <div class="ico">🎯</div>
+            <h2>Lance-toi en 10 secondes</h2>
+            <p>Voici des filtres rentables prêts à l'emploi. Active-les maintenant, modifie-les à tout moment.</p>
         </div>
+        <div class="def-label">Filtres par défaut</div>
+        <div class="fc-item on" id="fc-ua" onclick="toggleFC('fc-ua')">
+            <div class="fc-box">✓</div>
+            <div class="fc-info"><div class="fc-name">Under Armour</div><div class="fc-detail">Tailles M·L·XL·XXL · Bon état</div></div>
+            <div class="fc-price">≤ 30 €</div>
+        </div>
+        <div class="fc-item on" id="fc-rl" onclick="toggleFC('fc-rl')">
+            <div class="fc-box">✓</div>
+            <div class="fc-info"><div class="fc-name">Ralph Lauren</div><div class="fc-detail">Tailles M·L·XL·XXL · Bon état</div></div>
+            <div class="fc-price">≤ 35 €</div>
+        </div>
+        <br>
+        <button class="btn-full btn-p" onclick="finishSetup()">Activer les filtres sélectionnés →</button>
+        <div class="setup-skip"><button onclick="finishSetup(true)">Passer cette étape</button></div>
+    </div>
+</div>
 
-        <div class="nav-section">
-            <div class="nav-section-title">
+<!-- ══ APP ══ -->
+<div id="app" class="app hidden">
+    <aside class="sb" id="sb">
+        <div class="sb-logo">
+            <img src="/static/logo.png" alt="">
+            <div><h1>Vinted Sniper</h1><p>Surveillance temps réel</p></div>
+        </div>
+        <div class="nav-sec" id="vinted-sec">
+            <div class="nav-sec-ttl">
                 <span>Vinted</span>
-                <button class="add-btn" title="Ajouter un filtre" onclick="openFilterModal()">＋</button>
+                <button class="add-btn" id="add-filter-btn" onclick="openFM()" title="Nouveau filtre">＋</button>
             </div>
-            <div class="nav-item active" data-tab="all" onclick="selectTab('all')">
-                <span class="icon">🌐</span>
-                <span class="label">Toutes les annonces</span>
-                <span class="count" id="count-all">0</span>
+            <div class="ni on" data-tab="all" onclick="goTab('all')">
+                <span class="ico">🌐</span><span class="lbl">Toutes les annonces</span>
+                <span class="bdg" id="all-bdg">0</span>
             </div>
-            <div id="filters-nav"></div>
+            <div id="fnav"></div>
         </div>
-
-        <div class="nav-section">
-            <div class="nav-section-title">Catégories</div>
-            <div class="nav-item locked" onclick="selectTab('conseils')">
-                <span class="icon">💡</span>
-                <span class="label">Conseils</span>
-                <span class="lock">🔒</span>
-            </div>
-            <div class="nav-item locked" onclick="selectTab('niche')">
-                <span class="icon">🎯</span>
-                <span class="label">Niche</span>
-                <span class="lock">🔒</span>
-            </div>
-            <div class="nav-item locked" onclick="selectTab('ebooks')">
-                <span class="icon">📚</span>
-                <span class="label">Ebooks</span>
-                <span class="lock">🔒</span>
+        <div class="nav-sec">
+            <div class="nav-sec-ttl">Catégories</div>
+            <div class="ni locked"><span class="ico">💡</span><span class="lbl">Conseils</span><span style="font-size:11px;color:var(--gold);margin-left:auto">🔒</span></div>
+            <div class="ni locked"><span class="ico">🎯</span><span class="lbl">Niche</span><span style="font-size:11px;color:var(--gold);margin-left:auto">🔒</span></div>
+            <div class="ni locked"><span class="ico">📚</span><span class="lbl">Ebooks</span><span style="font-size:11px;color:var(--gold);margin-left:auto">🔒</span></div>
+        </div>
+        <div class="nav-sec">
+            <div class="ni" data-tab="payment" onclick="goTab('payment')">
+                <span class="ico">💳</span><span class="lbl">Passer Premium</span>
+                <span style="font-size:10px;background:var(--gold);color:#1a1200;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:auto">PRO</span>
             </div>
         </div>
-
-        <div class="sidebar-footer">
-            <div class="status-pill">
-                <span class="status-dot" id="status-dot"></span>
-                <span id="status-text">Connexion…</span>
+        <div class="nav-sec hidden" id="admin-nav">
+            <div class="nav-sec-ttl">Admin</div>
+            <div class="ni" data-tab="admin" onclick="goTab('admin')">
+                <span class="ico">⚙️</span><span class="lbl">Codes d'invitation</span>
             </div>
-            <div class="user-pill">
-                <div class="user-avatar" id="user-avatar">?</div>
-                <div class="user-info">
-                    <div class="user-name" id="user-name">—</div>
-                    <div class="user-tier" id="user-tier">—</div>
-                </div>
+        </div>
+        <div class="sb-foot">
+            <div class="st-row"><span class="st-dot" id="stdot"></span><span id="sttxt">Connexion…</span></div>
+            <div class="u-pill">
+                <div class="u-av" id="uav">?</div>
+                <div><div class="u-name" id="uname">—</div><div class="u-tier" id="utier">—</div></div>
             </div>
-            <button class="small-btn" onclick="clearItems()">🧹 Vider le feed</button>
-            <button class="small-btn danger" onclick="doLogout()">🚪 Se déconnecter</button>
+            <button class="sb-act" onclick="clearItems()">🧹 Vider le feed</button>
+            <button class="sb-act red" onclick="doLogout()">🚪 Déconnexion</button>
         </div>
     </aside>
 
-    <!-- MAIN -->
     <main class="main">
-        <header class="main-header">
-            <div class="main-title">
-                <h2 id="page-title">Toutes les annonces</h2>
-                <p id="page-subtitle">En attente du premier scan…</p>
-            </div>
-            <div class="stats-row">
-                <div class="stat">
-                    <div class="stat-label">Annonces</div>
-                    <div class="stat-value" id="stat-items">0</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">Filtres</div>
-                    <div class="stat-value" id="stat-filters">0</div>
-                </div>
+        <header class="pg-hd">
+            <div class="pg-ttl"><h2 id="pgttl">Toutes les annonces</h2><p id="pgsub">En attente du premier scan…</p></div>
+            <div class="stats">
+                <div class="stat"><div class="stat-l">Annonces</div><div class="stat-v" id="stitems">0</div></div>
+                <div class="stat"><div class="stat-l">Filtres</div><div class="stat-v" id="stfilters">0</div></div>
             </div>
         </header>
-
-        <!-- VINTED FEEDS -->
-        <div id="feed-container">
-            <div class="items-grid" id="items-grid"></div>
-            <div class="feed-empty hidden" id="feed-empty">
-                <div class="feed-empty-icon">📦</div>
-                <h3 id="empty-title">Aucune annonce pour l'instant</h3>
-                <p id="empty-text">Ajoute un filtre Vinted pour démarrer la surveillance.</p>
+        <div id="feed-view">
+            <div class="grid" id="grid"></div>
+            <div class="empty hidden" id="empty-feed">
+                <div class="ei">📦</div>
+                <h3 id="ef-ttl">Aucune annonce pour l'instant</h3>
+                <p id="ef-txt">Ajoute un filtre Vinted pour démarrer.</p>
             </div>
         </div>
-
-        <!-- COMING SOON (catégories grisées) -->
-        <div class="coming-soon hidden" id="coming-soon">
-            <div class="coming-soon-icon" id="coming-icon">🔒</div>
-            <h3 id="coming-title">Bientôt disponible</h3>
-            <p id="coming-text">Cette section arrive très prochainement.</p>
-            <div class="coming-soon-badge">À venir prochainement</div>
+        <div class="coming hidden" id="coming-view">
+            <div class="coming-ico" id="cv-ico">🔒</div>
+            <h3 id="cv-ttl">Bientôt disponible</h3>
+            <p id="cv-txt">Cette section arrive très prochainement.</p>
+            <div class="coming-tag">À venir prochainement</div>
+        </div>
+        <div class="hidden" id="payment-view">
+            <div class="pay-grid">
+                <div class="plan-card">
+                    <div class="plan-name">🆓 Gratuit</div>
+                    <div class="plan-price">0 €<span>/mois</span></div>
+                    <div class="plan-desc">Pour découvrir et tester l'outil.</div>
+                    <ul class="plan-feats">
+                        <li>Filtres illimités</li><li>Scan toutes les 30s</li>
+                        <li>Alertes temps réel</li><li class="no">Support prioritaire</li><li class="no">Filtres avancés</li>
+                    </ul>
+                    <button class="plan-btn">Plan actuel</button>
+                </div>
+                <div class="plan-card feat">
+                    <div class="plan-badge">RECOMMANDÉ</div>
+                    <div class="plan-name">⚡ Pro</div>
+                    <div class="plan-price">19,90 €<span>/mois</span></div>
+                    <div class="plan-desc">Pour les sourceurs sérieux.</div>
+                    <ul class="plan-feats">
+                        <li>Tout du plan gratuit</li><li>Filtres avancés (prix max, exclusions)</li>
+                        <li>Support prioritaire</li><li>Conseils & Niche</li><li>Notifications email</li>
+                    </ul>
+                    <button class="plan-btn">🔜 Arrive bientôt</button>
+                </div>
+                <div class="plan-card">
+                    <div class="plan-name">🎓 Accompagnement</div>
+                    <div class="plan-price">0 €<span>/toujours</span></div>
+                    <div class="plan-desc">Réservé aux membres de l'accompagnement.</div>
+                    <ul class="plan-feats">
+                        <li>Accès Pro à vie</li><li>Toutes les fonctionnalités</li>
+                        <li>Support inclus</li><li>Code d'invitation requis</li>
+                    </ul>
+                    <button class="plan-btn">Via code d'invitation</button>
+                </div>
+            </div>
+            <div class="pay-soon">
+                <div class="ps-ico">🔜</div>
+                <div>
+                    <h4>Le paiement arrive très prochainement</h4>
+                    <p>La plateforme Stripe est en cours d'intégration. Les membres de l'accompagnement conservent leur accès gratuit à vie via code d'invitation.</p>
+                </div>
+            </div>
+        </div>
+        <div class="hidden" id="admin-view">
+            <div class="adm-sec">
+                <h3>🎟️ Générer des codes d'invitation</h3>
+                <div class="inv-form">
+                    <div class="inv-f"><label>Quantité</label><input type="number" id="inv-count" value="5" min="1" max="50" style="width:75px"></div>
+                    <div class="inv-f"><label>Tier</label>
+                        <select id="inv-tier">
+                            <option value="accompaniment">Accompagnement</option>
+                            <option value="pro">Pro</option>
+                            <option value="free">Free</option>
+                        </select>
+                    </div>
+                    <div class="inv-f" style="flex:1;min-width:150px"><label>Note (optionnelle)</label><input type="text" id="inv-note" placeholder="Ex: Promo Mai 2025"></div>
+                    <button class="inv-gen" onclick="genCodes()">⚡ Générer</button>
+                </div>
+                <div class="codes-box" id="codes-box">
+                    <h4 id="codes-title">Codes générés — clique pour copier</h4>
+                    <div id="codes-list"></div>
+                </div>
+            </div>
+            <div class="adm-sec">
+                <h3>📋 Tous les codes
+                    <button onclick="loadInvites()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:8px">↻ Actualiser</button>
+                </h3>
+                <div id="inv-table-wrap"><div style="color:var(--muted);font-size:13px;padding:16px 0">Clique sur "Actualiser" pour charger.</div></div>
+            </div>
         </div>
     </main>
 </div>
 
-<!-- ================================ MODAL FILTRE ================================ -->
-<div class="modal-overlay" id="filter-modal" onclick="closeOnBg(event, 'filter-modal')">
-    <div class="modal">
+<!-- MODAL FILTRE -->
+<div class="modal-ov" id="fm" onclick="closeMOv(event,'fm')">
+    <div class="modal-box">
         <h3>Ajouter un filtre Vinted</h3>
-        <p>Colle l'URL de ta recherche Vinted (le tri par nouveauté sera ajouté automatiquement).</p>
+        <p>Colle l'URL de ta recherche. Le tri par nouveauté sera ajouté automatiquement.</p>
         <form onsubmit="addFilter(event)">
-            <div class="form-group">
-                <label>Nom du filtre</label>
-                <input type="text" id="filter-name" placeholder="Ex: Nike Air Max 38" required maxlength="60">
-            </div>
-            <div class="form-group">
-                <label>URL Vinted</label>
-                <input type="url" id="filter-url" placeholder="https://www.vinted.fr/catalog?..." required>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('filter-modal')">Annuler</button>
-                <button type="submit" class="btn btn-primary">Ajouter</button>
+            <div class="fg"><label>Nom du filtre</label><input type="text" id="fn" placeholder="Ex: Nike Air Max 38" required maxlength="60"></div>
+            <div class="fg"><label>URL Vinted</label><input type="url" id="fu" placeholder="https://www.vinted.fr/catalog?..." required></div>
+            <div class="m-acts">
+                <button type="button" class="btn-full btn-g" onclick="closeMod('fm')">Annuler</button>
+                <button type="submit" class="btn-full btn-p">Ajouter</button>
             </div>
         </form>
     </div>
 </div>
 
-<div class="toast-container" id="toasts"></div>
+<!-- TUTORIAL -->
+<div id="tut">
+    <div class="tut-bg"></div>
+    <div class="tut-spot" id="tspot"></div>
+    <div class="tut-card" id="tcard">
+        <div class="tut-step" id="tstep">Étape 1/6</div>
+        <div class="tut-ttl" id="tttl">Bienvenue !</div>
+        <div class="tut-txt" id="ttxt">Bienvenue sur Vinted Sniper.</div>
+        <div class="tut-acts">
+            <div class="tut-dots" id="tdots"></div>
+            <div class="tut-btns">
+                <button class="tut-btn sk" onclick="endTut()">Passer</button>
+                <button class="tut-btn nx" id="tnext" onclick="nextTut()">Suivant →</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
 
 <script>
-// =============================================================================
-// STATE
-// =============================================================================
-const state = {
-    user: null,
-    filters: [],         // [{id, name, url, ...}]
-    items: [],           // tous les items reçus (cache local)
-    currentTab: 'all',   // 'all' | 'filter:<id>' | 'conseils' | 'niche' | 'ebooks'
-};
+const S={user:null,filters:[],items:[],tab:'all'};
+let ws=null,wsT=null;
 
-let ws = null;
-let reconnectTimer = null;
-
-// =============================================================================
-// API HELPERS
-// =============================================================================
-async function api(path, options = {}) {
-    const res = await fetch(path, {
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        ...options,
-    });
-    return res;
+/* ── SCREENS ── */
+function showScr(id){['landing','auth','setup','app'].forEach(s=>document.getElementById(s).classList.toggle('hidden',s!==id))}
+function showLanding(){showScr('landing')}
+function showAuth(tab,trial){
+    showScr('auth');switchTab(tab);
+    document.getElementById('trial-banner').classList.toggle('hidden',!trial);
 }
 
-// =============================================================================
-// AUTH
-// =============================================================================
-function showError(msg) {
-    const el = document.getElementById('auth-error');
-    el.textContent = msg;
-    el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 5000);
+/* ── AUTH ── */
+function switchTab(tab){
+    document.querySelectorAll('.a-tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===tab));
+    document.getElementById('lform').classList.toggle('hidden',tab!=='login');
+    document.getElementById('rform').classList.toggle('hidden',tab!=='register');
+    clearErr();
+}
+function setErr(m){const e=document.getElementById('aerr');e.textContent=m;e.classList.add('on')}
+function clearErr(){document.getElementById('aerr').classList.remove('on')}
+
+async function doLogin(e){
+    e.preventDefault();clearErr();
+    const b=document.getElementById('lbtn');b.disabled=true;b.textContent='Connexion…';
+    try{
+        const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({identifier:document.getElementById('lid').value,password:document.getElementById('lpw').value})});
+        if(!r.ok){setErr((await r.json().catch(()=>({}))).detail||'Identifiants invalides');return}
+        await onAuth(await r.json(),false);
+    }catch{setErr('Erreur réseau')}
+    finally{b.disabled=false;b.textContent='Se connecter'}
 }
 
-function switchAuthTab(tab) {
-    document.querySelectorAll('.auth-tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.tab === tab);
-    });
-    document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
-    document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
-    document.getElementById('auth-error').classList.remove('show');
+async function doRegister(e){
+    e.preventDefault();clearErr();
+    const b=document.getElementById('rbtn');b.disabled=true;b.textContent='Création…';
+    try{
+        const r=await api('/api/auth/register',{method:'POST',body:JSON.stringify({
+            email:document.getElementById('remail').value,
+            username:document.getElementById('runame').value,
+            password:document.getElementById('rpw').value,
+            invite_code:document.getElementById('rinvite').value||null
+        })});
+        if(!r.ok){const err=await r.json().catch(()=>({}));setErr(typeof err.detail==='string'?err.detail:'Erreur lors de la création');return}
+        await onAuth(await r.json(),true);
+    }catch{setErr('Erreur réseau')}
+    finally{b.disabled=false;b.textContent='Créer mon compte'}
 }
 
-async function doLogin(e) {
-    e.preventDefault();
-    const btn = document.getElementById('login-btn');
-    btn.disabled = true; btn.textContent = 'Connexion…';
-    try {
-        const res = await api('/api/auth/login', {
-            method: 'POST',
-            body: JSON.stringify({
-                identifier: document.getElementById('login-id').value,
-                password: document.getElementById('login-pw').value,
-            }),
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            showError(err.detail || 'Identifiants invalides');
-            return;
-        }
-        const user = await res.json();
-        await onAuthenticated(user);
-    } catch (e) {
-        showError('Erreur réseau');
-    } finally {
-        btn.disabled = false; btn.textContent = 'Se connecter';
+async function onAuth(user,isNew){
+    S.user=user;
+    // Marquer la 1ère connexion pour déclencher le tuto après launchApp
+    if(!localStorage.getItem('vsw_tut_done')){
+        sessionStorage.setItem('vsw_first_login','1');
     }
+    if(isNew)showScr('setup');else await launchApp();
 }
 
-async function doRegister(e) {
-    e.preventDefault();
-    const btn = document.getElementById('register-btn');
-    btn.disabled = true; btn.textContent = 'Création…';
-    try {
-        const res = await api('/api/auth/register', {
-            method: 'POST',
-            body: JSON.stringify({
-                email: document.getElementById('reg-email').value,
-                username: document.getElementById('reg-username').value,
-                password: document.getElementById('reg-pw').value,
-                invite_code: document.getElementById('reg-invite').value || null,
-            }),
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            const msg = typeof err.detail === 'string' ? err.detail : 'Erreur lors de la création';
-            showError(msg);
-            return;
+async function doLogout(){
+    if(!confirm('Se déconnecter ?'))return;
+    if(ws)try{ws.close()}catch(e){}
+    await api('/api/auth/logout',{method:'POST'});
+    S.user=null;S.filters=[];S.items=[];showLanding();
+}
+
+async function checkAuth(){
+    try{const r=await api('/api/auth/me');if(r.ok){S.user=await r.json();await launchApp()}}catch(e){}
+}
+
+/* ── SETUP ── */
+function toggleFC(id){
+    const el=document.getElementById(id);el.classList.toggle('on');
+    el.querySelector('.fc-box').textContent=el.classList.contains('on')?'✓':'';
+}
+const DEF_FILTERS=[
+    {id:'fc-ua',name:'Under Armour',url:'https://www.vinted.fr/catalog?search_text=Under%20Armour&search_id=33619318764&size_ids[]=207&size_ids[]=208&size_ids[]=209&size_ids[]=210&page=1&time=1777628022&brand_ids[]=52035&status_ids[]=1&status_ids[]=6&price_to=30&currency=EUR&order=newest_first'},
+    {id:'fc-rl',name:'Ralph Lauren',url:'https://www.vinted.fr/catalog?search_text=Ralph%20Lauren&search_id=33619338153&size_ids[]=207&size_ids[]=208&size_ids[]=209&size_ids[]=210&page=1&time=1777628060&brand_ids[]=88&status_ids[]=1&status_ids[]=6&price_to=35&currency=EUR&order=newest_first&search_by_image_uuid=&search_by_image_id='}
+];
+async function finishSetup(skip=false){
+    if(!skip){
+        for(const f of DEF_FILTERS){
+            if(document.getElementById(f.id).classList.contains('on'))
+                await api('/api/filters',{method:'POST',body:JSON.stringify({name:f.name,url:f.url})});
         }
-        const user = await res.json();
-        await onAuthenticated(user);
-    } catch (e) {
-        showError('Erreur réseau');
-    } finally {
-        btn.disabled = false; btn.textContent = 'Créer mon compte';
     }
+    await launchApp();
 }
 
-async function doLogout() {
-    if (!confirm('Se déconnecter ?')) return;
-    try { if (ws) ws.close(); } catch (e) {}
-    await api('/api/auth/logout', { method: 'POST' });
-    state.user = null;
-    state.filters = [];
-    state.items = [];
-    document.getElementById('app-screen').classList.add('hidden');
-    document.getElementById('auth-screen').classList.remove('hidden');
-}
-
-async function checkAuth() {
-    try {
-        const res = await api('/api/auth/me');
-        if (res.ok) {
-            const user = await res.json();
-            await onAuthenticated(user);
-        }
-    } catch (e) {}
-}
-
-async function onAuthenticated(user) {
-    state.user = user;
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('app-screen').classList.remove('hidden');
-    renderUser();
-    await fetchFilters();
-    await fetchItems();
+/* ── APP ── */
+async function launchApp(){
+    showScr('app');renderUser();
+    if(S.user&&S.user.tier==='admin')document.getElementById('admin-nav').classList.remove('hidden');
+    await Promise.all([fetchFilters(),fetchItems()]);
     connectWS();
-}
-
-function renderUser() {
-    const u = state.user;
-    if (!u) return;
-    document.getElementById('user-name').textContent = u.username;
-    document.getElementById('user-avatar').textContent = u.username[0].toUpperCase();
-    const tierEl = document.getElementById('user-tier');
-    tierEl.textContent = u.tier;
-    tierEl.className = 'user-tier ' + u.tier;
-}
-
-// =============================================================================
-// FILTRES
-// =============================================================================
-async function fetchFilters() {
-    try {
-        const res = await api('/api/filters');
-        if (!res.ok) return;
-        state.filters = await res.json();
-        renderFilters();
-        document.getElementById('stat-filters').textContent = state.filters.length;
-    } catch (e) { console.error(e); }
-}
-
-function renderFilters() {
-    const container = document.getElementById('filters-nav');
-    if (!state.filters.length) {
-        container.innerHTML = '<div class="empty-section">Aucun filtre actif</div>';
-        return;
+    // Tuto : uniquement si jamais fait ET si c'est une vraie 1ère connexion (flag sessionStorage)
+    if(!localStorage.getItem('vsw_tut_done') && sessionStorage.getItem('vsw_first_login')){
+        sessionStorage.removeItem('vsw_first_login');
+        setTimeout(startTut,800);
     }
-    container.innerHTML = state.filters.map(f => {
-        const count = state.items.filter(i => i.filter_id === f.id).length;
-        return `
-            <div class="nav-item" data-tab="filter:${f.id}" onclick="selectTab('filter:${f.id}')">
-                <span class="icon">🔍</span>
-                <span class="label" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
-                <span class="count">${count}</span>
-                <button class="delete-x" onclick="event.stopPropagation(); deleteFilter(${f.id})" title="Supprimer">✕</button>
-            </div>
-        `;
+}
+function renderUser(){
+    const u=S.user;if(!u)return;
+    document.getElementById('uname').textContent=u.username;
+    document.getElementById('uav').textContent=u.username[0].toUpperCase();
+    const t=document.getElementById('utier');t.textContent=u.tier;t.className='u-tier '+u.tier;
+}
+
+/* ── FILTRES ── */
+async function fetchFilters(){
+    const r=await api('/api/filters');if(!r.ok)return;
+    S.filters=await r.json();renderFilters();
+    document.getElementById('stfilters').textContent=S.filters.length;
+}
+function renderFilters(){
+    const nav=document.getElementById('fnav');
+    if(!S.filters.length){nav.innerHTML='<div class="empty-nav">Aucun filtre actif</div>'}
+    else nav.innerHTML=S.filters.map(f=>{
+        const c=S.items.filter(i=>i.filter_id===f.id).length;
+        return`<div class="ni" data-tab="filter:${f.id}" onclick="goTab('filter:${f.id}')">
+            <span class="ico">🔍</span><span class="lbl" title="${h(f.name)}">${h(f.name)}</span>
+            <span class="bdg">${c}</span>
+            <button class="dx" onclick="event.stopPropagation();delFilter(${f.id})">✕</button>
+        </div>`;
     }).join('');
-    // Re-mark active
-    markActiveTab();
+    markTab();
 }
-
-async function addFilter(e) {
+async function addFilter(e){
     e.preventDefault();
-    const name = document.getElementById('filter-name').value.trim();
-    const url = document.getElementById('filter-url').value.trim();
-    try {
-        const res = await api('/api/filters', {
-            method: 'POST',
-            body: JSON.stringify({ name, url }),
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            showToast('❌', 'Erreur', err.detail || 'URL invalide');
-            return;
-        }
-        showToast('✅', 'Filtre ajouté', name);
-        closeModal('filter-modal');
-        document.getElementById('filter-name').value = '';
-        document.getElementById('filter-url').value = '';
-        await fetchFilters();
-    } catch (e) {
-        showToast('❌', 'Erreur', 'Impossible de créer le filtre');
-    }
-}
-
-async function deleteFilter(id) {
-    const f = state.filters.find(x => x.id === id);
-    if (!f) return;
-    if (!confirm(`Supprimer le filtre "${f.name}" ?`)) return;
-    await api('/api/filters/' + id, { method: 'DELETE' });
-    // Si on était sur ce filtre, rebascule sur "all"
-    if (state.currentTab === 'filter:' + id) selectTab('all');
+    const name=document.getElementById('fn').value.trim(),url=document.getElementById('fu').value.trim();
+    const r=await api('/api/filters',{method:'POST',body:JSON.stringify({name,url})});
+    if(!r.ok){toast('❌','Erreur',(await r.json().catch(()=>({}))).detail||'URL invalide');return}
+    toast('✅','Filtre ajouté',name);closeMod('fm');
+    document.getElementById('fn').value='';document.getElementById('fu').value='';
     await fetchFilters();
-    // Retire les items de ce filtre du cache local
-    state.items = state.items.filter(i => i.filter_id !== id);
-    renderItems();
-    updateCounts();
+}
+async function delFilter(id){
+    const f=S.filters.find(x=>x.id===id);
+    if(f&&!confirm(`Supprimer "${f.name}" ?`))return;
+    await api('/api/filters/'+id,{method:'DELETE'});
+    if(S.tab==='filter:'+id)goTab('all');
+    S.items=S.items.filter(i=>i.filter_id!==id);
+    await fetchFilters();renderItems();updateCounts();
 }
 
-// =============================================================================
-// ITEMS
-// =============================================================================
-async function fetchItems() {
-    try {
-        const res = await api('/api/items?limit=200');
-        if (!res.ok) return;
-        state.items = await res.json();
-        renderItems();
-        updateCounts();
-    } catch (e) { console.error(e); }
+/* ── ITEMS ── */
+async function fetchItems(){
+    const r=await api('/api/items?limit=200');if(!r.ok)return;
+    S.items=await r.json();renderItems();updateCounts();
 }
-
-async function clearItems() {
-    if (!confirm('Vider toutes les annonces ?')) return;
-    await api('/api/items', { method: 'DELETE' });
-    state.items = [];
-    renderItems();
-    updateCounts();
+async function clearItems(){
+    if(!confirm('Vider toutes les annonces ?'))return;
+    await api('/api/items',{method:'DELETE'});
+    S.items=[];renderItems();updateCounts();
 }
-
-function getVisibleItems() {
-    if (state.currentTab === 'all') return state.items;
-    if (state.currentTab.startsWith('filter:')) {
-        const fid = parseInt(state.currentTab.split(':')[1]);
-        return state.items.filter(i => i.filter_id === fid);
+function vis(){
+    if(S.tab==='all')return S.items;
+    if(S.tab.startsWith('filter:')){const id=parseInt(S.tab.split(':')[1]);return S.items.filter(i=>i.filter_id===id)}
+    return[];
+}
+function renderItems(){
+    const g=document.getElementById('grid'),ef=document.getElementById('empty-feed');
+    g.innerHTML='';const list=vis();
+    if(!list.length){
+        ef.classList.remove('hidden');
+        document.getElementById('ef-ttl').textContent="Aucune annonce pour l'instant";
+        document.getElementById('ef-txt').textContent=S.filters.length?"Le scanner tourne, ça arrive bientôt.":"Ajoute un filtre pour démarrer.";
+    }else{ef.classList.add('hidden');list.forEach(item=>g.appendChild(mkCard(item,false)))}
+}
+function mkCard(item,isNew){
+    const el=document.createElement('div');
+    el.className='card'+(isNew?' new':'');el.dataset.id=item.id;
+    const photos=item.photos&&item.photos.length?item.photos:(item.main_photo?[item.main_photo]:[]);
+    const stars=item.seller.feedback_count>0?'⭐'.repeat(Math.round(item.seller.rating)):'<span style="color:var(--muted)">Nouveau</span>';
+    const dots=photos.length>1?photos.slice(0,5).map((_,i)=>`<span class="c-dot${i===0?' on':''}"></span>`).join(''):'';
+    el.innerHTML=`<div class="c-img-w">
+        ${item.main_photo?`<img class="c-img" src="${item.main_photo}" alt="" loading="lazy">`:''}
+        ${isNew?'<span class="new-pill">Nouveau</span>':''}
+        <span class="f-pill">${h(item.filter_name)}</span>
+        ${dots?`<div class="c-thumbs">${dots}</div>`:''}
+    </div>
+    <div class="c-body">
+        <div class="c-title">${h(item.title||'Sans titre')}</div>
+        <div class="c-tags"><span class="tag br">${h(item.brand)}</span><span class="tag">📏 ${h(item.size)}</span><span class="tag">💎 ${h(item.status)}</span></div>
+        <div class="c-seller"><span class="s-nm">${h(item.seller.login)}</span><span class="stars">${stars}</span><span style="font-size:11px">(${item.seller.feedback_count})</span></div>
+        <div class="c-price-row"><div><div class="pm">${item.price.toFixed(2)} ${item.currency}</div><div class="pttc">TTC: ${item.price_ttc.toFixed(2)} ${item.currency}</div></div><div class="cage">⌛ ${h(item.published_at)}</div></div>
+    </div>
+    <div class="c-btns">
+        <a href="${item.url}" target="_blank" rel="noopener" class="cb p">🔍 Voir</a>
+        <a href="${item.negotiate_url}" target="_blank" rel="noopener" class="cb">💬 Négocier</a>
+    </div>`;
+    if(photos.length>1){
+        const img=el.querySelector('.c-img'),ds=el.querySelectorAll('.c-dot');let idx=0,iv=null;
+        el.addEventListener('mouseenter',()=>{iv=setInterval(()=>{idx=(idx+1)%Math.min(photos.length,5);img.src=photos[idx];ds.forEach((d,i)=>d.classList.toggle('on',i===idx))},800)});
+        el.addEventListener('mouseleave',()=>{clearInterval(iv);idx=0;img.src=photos[0];ds.forEach((d,i)=>d.classList.toggle('on',i===0))});
     }
-    return [];
+    return el;
 }
-
-function renderItems() {
-    const grid = document.getElementById('items-grid');
-    const empty = document.getElementById('feed-empty');
-    grid.innerHTML = '';
-
-    const visible = getVisibleItems();
-    if (!visible.length) {
-        empty.classList.remove('hidden');
-        if (state.currentTab === 'all') {
-            document.getElementById('empty-title').textContent = state.filters.length
-                ? 'Aucune annonce pour l\'instant'
-                : 'Aucune annonce pour l\'instant';
-            document.getElementById('empty-text').textContent = state.filters.length
-                ? 'Le scanner tourne, les nouvelles annonces apparaîtront ici.'
-                : 'Ajoute un filtre Vinted pour démarrer la surveillance.';
-        } else {
-            document.getElementById('empty-title').textContent = 'Aucune annonce sur ce filtre';
-            document.getElementById('empty-text').textContent = 'Patiente, les nouveautés vont arriver.';
-        }
-        return;
-    }
-    empty.classList.add('hidden');
-    visible.forEach(item => grid.appendChild(buildItemCard(item, false)));
-}
-
-function buildItemCard(item, isNew) {
-    const card = document.createElement('div');
-    card.className = 'item-card' + (isNew ? ' new' : '');
-    card.dataset.itemId = item.id;
-
-    const stars = item.seller.feedback_count > 0
-        ? '⭐'.repeat(Math.round(item.seller.rating))
-        : '<span style="color: var(--muted)">Nouveau</span>';
-
-    const photos = item.photos && item.photos.length ? item.photos : (item.main_photo ? [item.main_photo] : []);
-    const dotsHtml = photos.length > 1
-        ? photos.slice(0, 5).map((_, i) => `<span class="item-thumb-dot${i === 0 ? ' active' : ''}"></span>`).join('')
-        : '';
-
-    card.innerHTML = `
-        <div class="item-image-wrap">
-            ${item.main_photo ? `<img class="item-image" src="${item.main_photo}" alt="" loading="lazy">` : ''}
-            ${isNew ? '<span class="new-badge">Nouveau</span>' : ''}
-            <span class="filter-badge" title="${escapeHtml(item.filter_name)}">${escapeHtml(item.filter_name)}</span>
-            ${dotsHtml ? `<div class="item-thumbs">${dotsHtml}</div>` : ''}
-        </div>
-        <div class="item-body">
-            <div class="item-title">${escapeHtml(item.title || 'Sans titre')}</div>
-            <div class="item-meta">
-                <span class="meta-tag brand">${escapeHtml(item.brand)}</span>
-                <span class="meta-tag">📏 ${escapeHtml(item.size)}</span>
-                <span class="meta-tag">💎 ${escapeHtml(item.status)}</span>
-            </div>
-            <div class="seller-row">
-                <div class="seller-info">
-                    <span class="seller-name">${escapeHtml(item.seller.login)}</span>
-                    <span class="stars">${stars}</span>
-                    <span class="feedback-count">(${item.seller.feedback_count})</span>
-                </div>
-            </div>
-            <div class="item-price-row">
-                <div class="price-block">
-                    <div class="price-main">${item.price.toFixed(2)} ${item.currency}</div>
-                    <div class="price-ttc">TTC: ${item.price_ttc.toFixed(2)} ${item.currency}</div>
-                </div>
-                <div class="item-time">⌛ ${escapeHtml(item.published_at)}</div>
-            </div>
-        </div>
-        <div class="item-actions">
-            <a href="${item.url}" target="_blank" rel="noopener" class="item-btn primary">🔍 Voir</a>
-            <a href="${item.negotiate_url}" target="_blank" rel="noopener" class="item-btn">💬 Négocier</a>
-        </div>
-    `;
-
-    if (photos.length > 1) {
-        const img = card.querySelector('.item-image');
-        const dots = card.querySelectorAll('.item-thumb-dot');
-        let idx = 0; let interval = null;
-        card.addEventListener('mouseenter', () => {
-            interval = setInterval(() => {
-                idx = (idx + 1) % Math.min(photos.length, 5);
-                img.src = photos[idx];
-                dots.forEach((d, i) => d.classList.toggle('active', i === idx));
-            }, 800);
-        });
-        card.addEventListener('mouseleave', () => {
-            clearInterval(interval); idx = 0;
-            img.src = photos[0];
-            dots.forEach((d, i) => d.classList.toggle('active', i === 0));
-        });
-    }
-    return card;
-}
-
-function updateCounts() {
-    document.getElementById('stat-items').textContent = state.items.length;
-    document.getElementById('count-all').textContent = state.items.length;
-    // Re-render filter counts
+function updateCounts(){
+    document.getElementById('stitems').textContent=S.items.length;
+    document.getElementById('all-bdg').textContent=S.items.length;
     renderFilters();
 }
 
-// =============================================================================
-// TABS
-// =============================================================================
-function selectTab(tab) {
-    state.currentTab = tab;
-    markActiveTab();
-
-    const feed = document.getElementById('feed-container');
-    const coming = document.getElementById('coming-soon');
-    const title = document.getElementById('page-title');
-    const subtitle = document.getElementById('page-subtitle');
-
-    if (tab === 'conseils' || tab === 'niche' || tab === 'ebooks') {
-        feed.classList.add('hidden');
-        coming.classList.remove('hidden');
-        const data = {
-            conseils: { icon: '💡', title: 'Conseils', sub: 'Stratégies, astuces et retours d\'expérience.', text: 'Une bibliothèque de conseils dédiée aux meilleures pratiques Vinted arrive très prochainement.' },
-            niche: { icon: '🎯', title: 'Niche', sub: 'Marques rentables et niches à surveiller.', text: 'Découvre les marques et catégories les plus rentables. Section en préparation.' },
-            ebooks: { icon: '📚', title: 'Ebooks', sub: 'Guides téléchargeables.', text: 'Une collection d\'ebooks pour devenir un pro de la revente sera disponible ici.' },
-        }[tab];
-        document.getElementById('coming-icon').textContent = data.icon;
-        document.getElementById('coming-title').textContent = data.title + ' — Bientôt disponible';
-        document.getElementById('coming-text').textContent = data.text;
-        title.textContent = data.title;
-        subtitle.textContent = data.sub;
-        return;
-    }
-
-    feed.classList.remove('hidden');
-    coming.classList.add('hidden');
-
-    if (tab === 'all') {
-        title.textContent = 'Toutes les annonces';
-        subtitle.textContent = state.filters.length
-            ? `${state.filters.length} filtre(s) actif(s)`
-            : 'Aucun filtre actif — ajoute en un pour démarrer.';
-    } else if (tab.startsWith('filter:')) {
-        const fid = parseInt(tab.split(':')[1]);
-        const f = state.filters.find(x => x.id === fid);
-        if (f) {
-            title.textContent = f.name;
-            subtitle.textContent = 'Annonces du filtre uniquement';
-        }
-    }
-
+/* ── TABS ── */
+const COMING={
+    conseils:{icon:'💡',ttl:'Conseils',sub:'Astuces et stratégies.',txt:'Une bibliothèque de conseils pratiques pour devenir expert de la revente Vinted. Bientôt disponible.'},
+    niche:{icon:'🎯',ttl:'Niche',sub:'Marques et niches rentables.',txt:'Les marques les plus rentables et les niches peu connues. En préparation.'},
+    ebooks:{icon:'📚',ttl:'Ebooks',sub:'Guides téléchargeables.',txt:'Des ebooks complets pour maîtriser la revente Vinted de A à Z. Arrive bientôt.'}
+};
+function goTab(tab){
+    S.tab=tab;markTab();
+    ['feed-view','coming-view','payment-view','admin-view'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+    const ttl=document.getElementById('pgttl'),sub=document.getElementById('pgsub');
+    if(tab==='payment'){document.getElementById('payment-view').classList.remove('hidden');ttl.textContent='Passer Premium';sub.textContent='Plans et tarifs';return}
+    if(tab==='admin'){document.getElementById('admin-view').classList.remove('hidden');ttl.textContent='Administration';sub.textContent="Codes d'invitation";return}
+    if(COMING[tab]){const d=COMING[tab];document.getElementById('coming-view').classList.remove('hidden');document.getElementById('cv-ico').textContent=d.icon;document.getElementById('cv-ttl').textContent=d.ttl+' — Bientôt disponible';document.getElementById('cv-txt').textContent=d.txt;ttl.textContent=d.ttl;sub.textContent=d.sub;return}
+    document.getElementById('feed-view').classList.remove('hidden');
+    if(tab==='all'){ttl.textContent='Toutes les annonces';sub.textContent=S.filters.length?`${S.filters.length} filtre(s) actif(s)`:'Ajoute un filtre pour commencer'}
+    else if(tab.startsWith('filter:')){const fid=parseInt(tab.split(':')[1]);const f=S.filters.find(x=>x.id===fid);if(f){ttl.textContent=f.name;sub.textContent='Annonces de ce filtre uniquement'}}
     renderItems();
 }
+function markTab(){document.querySelectorAll('.ni').forEach(el=>el.classList.toggle('on',el.dataset.tab===S.tab))}
 
-function markActiveTab() {
-    document.querySelectorAll('.nav-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.tab === state.currentTab);
-    });
-}
-
-// =============================================================================
-// WEBSOCKET
-// =============================================================================
-function connectWS() {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.host}/ws`);
-
-    ws.onopen = () => {
-        document.getElementById('status-dot').className = 'status-dot connected';
-        document.getElementById('status-text').textContent = 'En ligne';
-        clearTimeout(reconnectTimer);
-    };
-
-    ws.onmessage = (e) => {
-        const data = JSON.parse(e.data);
-        if (data.type === 'new_item') {
-            state.items.unshift(data.item);
-            // Si on est sur "all" ou sur le filtre concerné, on prepend la card
-            if (state.currentTab === 'all' || state.currentTab === 'filter:' + data.item.filter_id) {
-                const grid = document.getElementById('items-grid');
-                document.getElementById('feed-empty').classList.add('hidden');
-                grid.insertBefore(buildItemCard(data.item, true), grid.firstChild);
+/* ── WS ── */
+function connectWS(){
+    const pr=location.protocol==='https:'?'wss:':'ws:';
+    ws=new WebSocket(`${pr}//${location.host}/ws`);
+    ws.onopen=()=>{document.getElementById('stdot').className='st-dot on';document.getElementById('sttxt').textContent='En ligne';clearTimeout(wsT)};
+    ws.onmessage=e=>{
+        const d=JSON.parse(e.data);
+        if(d.type==='new_item'){
+            S.items.unshift(d.item);
+            if(S.tab==='all'||S.tab==='filter:'+d.item.filter_id){
+                const g=document.getElementById('grid');
+                document.getElementById('empty-feed').classList.add('hidden');
+                g.insertBefore(mkCard(d.item,true),g.firstChild);
             }
-            updateCounts();
-            showToast('🛒', 'Nouvelle annonce', data.item.title);
-            document.getElementById('page-subtitle').textContent =
-                `Dernière annonce : à l'instant (${data.item.filter_name})`;
+            updateCounts();toast('🛒','Nouvelle annonce',d.item.title);
+            document.getElementById('pgsub').textContent=`Dernière annonce : à l'instant — ${d.item.filter_name}`;
         }
     };
+    ws.onclose=()=>{document.getElementById('stdot').className='st-dot off';document.getElementById('sttxt').textContent='Reconnexion…';if(S.user)wsT=setTimeout(connectWS,3000)};
+    ws.onerror=()=>{try{ws.close()}catch(e){}};
+}
+setInterval(()=>{if(ws&&ws.readyState===1)ws.send('ping')},25000);
 
-    ws.onclose = () => {
-        document.getElementById('status-dot').className = 'status-dot disconnected';
-        document.getElementById('status-text').textContent = 'Reconnexion…';
-        if (state.user) reconnectTimer = setTimeout(connectWS, 3000);
-    };
-
-    ws.onerror = () => { try { ws.close(); } catch (e) {} };
+/* ── ADMIN ── */
+async function genCodes(){
+    const count=parseInt(document.getElementById('inv-count').value)||5;
+    const tier=document.getElementById('inv-tier').value;
+    const note=document.getElementById('inv-note').value.trim();
+    const r=await api('/api/admin/invites',{method:'POST',body:JSON.stringify({count,tier,note:note||null})});
+    if(!r.ok){toast('❌','Erreur','Impossible de générer');return}
+    const data=await r.json();
+    const box=document.getElementById('codes-box'),list=document.getElementById('codes-list');
+    document.getElementById('codes-title').textContent=`${data.codes.length} code(s) [${tier}] — clique pour copier`;
+    list.innerHTML=data.codes.map(c=>`<span class="code-pill" onclick="cpCode('${c}',this)"><span>${c}</span><span class="cc">📋</span></span>`).join('');
+    box.classList.add('on');toast('✅',`${data.codes.length} codes créés`,tier);
+}
+function cpCode(code,el){navigator.clipboard.writeText(code).then(()=>{el.querySelector('.cc').textContent='✓';setTimeout(()=>el.querySelector('.cc').textContent='📋',1500)})}
+async function loadInvites(){
+    const r=await api('/api/admin/invites');if(!r.ok){toast('❌','Erreur','Chargement impossible');return}
+    const data=await r.json(),wrap=document.getElementById('inv-table-wrap');
+    if(!data.length){wrap.innerHTML='<div style="color:var(--muted);padding:16px 0;font-size:13px">Aucun code pour le moment.</div>';return}
+    wrap.innerHTML=`<table class="inv-table"><thead><tr><th>Code</th><th>Tier</th><th>Statut</th><th>Note</th></tr></thead>
+    <tbody>${data.map(i=>`<tr>
+        <td><span style="font-family:monospace;font-weight:700;letter-spacing:1px">${i.code}</span></td>
+        <td><span class="bt ${i.tier}">${i.tier}</span></td>
+        <td>${i.is_used?'<span style="color:var(--ok);font-weight:600">✓ Utilisé</span>':'<span style="color:var(--muted)">Disponible</span>'}</td>
+        <td style="color:var(--muted)">${i.note||'—'}</td>
+    </tr>`).join('')}</tbody></table>`;
 }
 
-setInterval(() => {
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send('ping');
-}, 25000);
-
-// =============================================================================
-// MODAL & TOAST
-// =============================================================================
-function openFilterModal() { document.getElementById('filter-modal').classList.add('show'); }
-function closeModal(id) { document.getElementById(id).classList.remove('show'); }
-function closeOnBg(e, id) { if (e.target.id === id) closeModal(id); }
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('show'));
-});
-
-function showToast(icon, title, msg) {
-    const c = document.getElementById('toasts');
-    const t = document.createElement('div');
-    t.className = 'toast';
-    t.innerHTML = `
-        <div class="toast-icon">${icon}</div>
-        <div class="toast-content">
-            <div class="toast-title">${escapeHtml(title)}</div>
-            <div class="toast-msg">${escapeHtml(msg || '')}</div>
-        </div>
-    `;
-    c.appendChild(t);
-    setTimeout(() => t.classList.add('fade'), 4000);
-    setTimeout(() => t.remove(), 4400);
+/* ── TUTORIAL ── */
+let tutIdx=0;
+const TUTS=[
+    {target:null,ttl:'👋 Bienvenue sur Vinted Sniper !',txt:"En quelques étapes, découvre les éléments clés. Tu peux passer à tout moment.",last:false},
+    {target:'#add-filter-btn',ttl:'➕ Ajoute un filtre',txt:"Clique ici pour ajouter une recherche Vinted à surveiller. Colle l'URL de ta recherche avec tes critères (marque, taille, prix max).",pos:'right'},
+    {target:'#vinted-sec',ttl:'📑 Tes filtres',txt:"Chaque filtre a sa propre page dans la sidebar. Clique pour voir uniquement ses annonces. La vue \"Toutes\" regroupe tout.",pos:'right'},
+    {target:'#grid',ttl:'🛒 Ton feed temps réel',txt:"Les nouvelles annonces arrivent ici automatiquement, sans rafraîchir. Un badge \"Nouveau\" + une notification apparaissent à chaque détection.",pos:'top'},
+    {target:'#stdot',ttl:'🟢 Connexion temps réel',txt:"Ce voyant indique que tu reçois les alertes en direct. S'il passe rouge, la reconnexion est automatique.",pos:'top'},
+    {target:null,ttl:"🚀 C'est parti !",txt:"Ajoute ton premier filtre et les bonnes affaires vont arriver. Bienvenue dans Vinted Sniper !",last:true}
+];
+function startTut(){
+    tutIdx=0;
+    const tut=document.getElementById('tut');
+    tut.classList.add('on');
+    renderTut();
+}
+function renderTut(){
+    const s=TUTS[tutIdx];
+    const spot=document.getElementById('tspot');
+    const card=document.getElementById('tcard');
+    document.getElementById('tstep').textContent='Étape '+(tutIdx+1)+'/'+TUTS.length;
+    document.getElementById('tttl').textContent=s.ttl;
+    document.getElementById('ttxt').textContent=s.txt;
+    document.getElementById('tnext').textContent=s.last?'Terminer ✓':'Suivant →';
+    document.getElementById('tdots').innerHTML=TUTS.map(function(_,i){return'<span class="tut-dot'+(i===tutIdx?' on':'')+'"></span>'}).join('');
+    // Étapes sans cible → carte centrée, spotlight caché
+    if(!s.target){
+        spot.style.cssText='left:-9999px;top:-9999px;width:0;height:0';
+        card.style.top='50%';card.style.left='50%';card.style.transform='translate(-50%,-50%)';
+        return;
+    }
+    const el=document.querySelector(s.target);
+    if(!el){
+        spot.style.cssText='left:-9999px;top:-9999px;width:0;height:0';
+        card.style.top='50%';card.style.left='50%';card.style.transform='translate(-50%,-50%)';
+        return;
+    }
+    const r=el.getBoundingClientRect(),pad=10;
+    spot.style.cssText='left:'+(r.left-pad)+'px;top:'+(r.top-pad)+'px;width:'+(r.width+pad*2)+'px;height:'+(r.height+pad*2)+'px';
+    const cw=290,vw=window.innerWidth,vh=window.innerHeight;
+    let cx,cy;
+    if(s.pos==='right'){cx=r.right+20;cy=r.top+r.height/2-100;if(cx+cw>vw-10)cx=r.left-cw-20;}
+    else if(s.pos==='top'){cx=r.left+r.width/2-cw/2;cy=r.top-220;if(cy<10)cy=r.bottom+20;}
+    else{cx=r.right+20;cy=r.top;}
+    cx=Math.max(10,Math.min(cx,vw-cw-10));
+    cy=Math.max(10,Math.min(cy,vh-220-10));
+    card.style.transform='none';card.style.left=cx+'px';card.style.top=cy+'px';
+}
+function nextTut(){
+    if(tutIdx>=TUTS.length-1){endTut();}
+    else{tutIdx++;renderTut();}
+}
+function endTut(){
+    document.getElementById('tut').classList.remove('on');
+    document.getElementById('tspot').style.cssText='left:-9999px;top:-9999px;width:0;height:0';
+    localStorage.setItem('vsw_tut_done','1');
 }
 
-// =============================================================================
-// UTILS
-// =============================================================================
-function escapeHtml(s) {
-    if (s == null) return '';
-    return String(s).replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    })[c]);
+/* ── MODAL ── */
+function openFM(){document.getElementById('fm').classList.add('on')}
+function closeMod(id){document.getElementById(id).classList.remove('on')}
+function closeMOv(e,id){if(e.target.id===id)closeMod(id)}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-ov').forEach(m=>m.classList.remove('on'))});
+
+/* ── TOAST ── */
+function toast(icon,ttl,msg){
+    const c=document.getElementById('toasts'),t=document.createElement('div');
+    t.className='toast';
+    t.innerHTML=`<div class="t-ico">${icon}</div><div><div class="t-ttl">${h(ttl)}</div><div class="t-msg">${h(msg||'')}</div></div>`;
+    c.appendChild(t);setTimeout(()=>t.classList.add('out'),4000);setTimeout(()=>t.remove(),4400);
 }
 
-// =============================================================================
-// INIT
-// =============================================================================
+/* ── UTILS ── */
+async function api(path,opts={}){return fetch(path,{credentials:'include',headers:{'Content-Type':'application/json'},...opts})}
+function h(s){if(s==null)return'';return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
 checkAuth();
 </script>
 </body>
