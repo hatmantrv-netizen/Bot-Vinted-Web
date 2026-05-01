@@ -1,0 +1,37 @@
+# fly.toml — Configuration Fly.io pour Vinted Sniper Web
+# Remplace "vinted-sniper" par le nom que tu as donné à ton app sur Fly
+
+app = "vinted-sniper"
+primary_region = "cdg"  # cdg = Paris — le plus proche pour toi
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+  SECURE_COOKIE = "true"
+  DB_NAME = "/data/vinted_sniper.db"
+
+# La DB SQLite est stockée dans un volume persistant (/data)
+# Sans ça, elle se reset à chaque déploiement
+[[mounts]]
+  source = "vinted_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false   # Important : garde le bot actif en permanence
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
