@@ -290,6 +290,11 @@
     .bt.accompaniment{background:rgba(245,196,81,.15);color:var(--gold)}
     .bt.pro{background:var(--ps);color:var(--p)}
     .bt.free{background:var(--card);color:var(--muted)}
+    .used-row{opacity:.55}
+    .invite-check{accent-color:var(--p);width:16px;height:16px;cursor:pointer}
+    .invite-check:disabled{cursor:not-allowed;opacity:.5}
+    .code-cell{cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:2px 6px;border-radius:4px;transition:all .15s}
+    .code-cell:hover{background:var(--card)}
 
     /* MODAL */
     .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:none;
@@ -509,35 +514,42 @@
         <div class="hidden" id="payment-view">
             <div class="pay-grid">
                 <div class="plan-card">
-                    <div class="plan-name">🆓 Gratuit</div>
-                    <div class="plan-price">0 €<span>/mois</span></div>
-                    <div class="plan-desc">Pour découvrir et tester l'outil.</div>
+                    <div class="plan-name">🎁 Essai gratuit</div>
+                    <div class="plan-price">7 j<span> offerts</span></div>
+                    <div class="plan-desc">Accès complet pendant 7 jours, sans CB.</div>
                     <ul class="plan-feats">
-                        <li>Filtres illimités</li><li>Scan toutes les 30s</li>
-                        <li>Alertes temps réel</li><li class="no">Support prioritaire</li><li class="no">Filtres avancés</li>
+                        <li>Filtres illimités (7 j)</li>
+                        <li>Alertes temps réel</li>
+                        <li>Toutes les fonctionnalités</li>
+                        <li class="no">Passe en gratuit après 7 j</li>
                     </ul>
-                    <button class="plan-btn">Plan actuel</button>
+                    <button class="plan-btn">À l'inscription</button>
                 </div>
                 <div class="plan-card feat">
                     <div class="plan-badge">RECOMMANDÉ</div>
                     <div class="plan-name">⚡ Pro</div>
-                    <div class="plan-price">19,90 €<span>/mois</span></div>
-                    <div class="plan-desc">Pour les sourceurs sérieux.</div>
+                    <div class="plan-price">5-10 €<span>/mois</span></div>
+                    <div class="plan-desc" style="font-style:italic">Prix non-défini — fixé au lancement.</div>
                     <ul class="plan-feats">
-                        <li>Tout du plan gratuit</li><li>Filtres avancés (prix max, exclusions)</li>
-                        <li>Support prioritaire</li><li>Conseils & Niche</li><li>Notifications email</li>
+                        <li>Utilisations illimitées</li>
+                        <li>Conseils, Niche & Ebooks</li>
+                        <li>Connexion compte Vinted (favoris)</li>
+                        <li>Alertes temps réel</li>
+                        <li>Support prioritaire</li>
                     </ul>
-                    <button class="plan-btn">🔜 Arrive bientôt</button>
+                    <button class="plan-btn" onclick="paymentSoon()">🔜 Choisir Pro</button>
                 </div>
                 <div class="plan-card">
-                    <div class="plan-name">🎓 Accompagnement</div>
-                    <div class="plan-price">0 €<span>/toujours</span></div>
-                    <div class="plan-desc">Réservé aux membres de l'accompagnement.</div>
+                    <div class="plan-name">🆓 Gratuit (après essai)</div>
+                    <div class="plan-price">0 €<span>/mois</span></div>
+                    <div class="plan-desc">Mode limité après les 7 jours d'essai.</div>
                     <ul class="plan-feats">
-                        <li>Accès Pro à vie</li><li>Toutes les fonctionnalités</li>
-                        <li>Support inclus</li><li>Code d'invitation requis</li>
+                        <li>3 filtres maximum</li>
+                        <li>Scan en arrière-plan</li>
+                        <li class="no">Pas d'alertes temps réel</li>
+                        <li class="no">Pas de Conseils / Niche / Ebooks</li>
                     </ul>
-                    <button class="plan-btn">Via code d'invitation</button>
+                    <button class="plan-btn">Plan automatique</button>
                 </div>
             </div>
             <div class="pay-soon">
@@ -718,7 +730,16 @@ function renderUser(){
     const u=S.user;if(!u)return;
     document.getElementById('uname').textContent=u.username;
     document.getElementById('uav').textContent=u.username[0].toUpperCase();
-    const t=document.getElementById('utier');t.textContent=u.tier;t.className='u-tier '+u.tier;
+    const t=document.getElementById('utier');
+    let label=u.tier;
+    // Affichage spécial pour trial avec jours restants
+    if(u.tier==='trial' && u.trial_ends_at){
+        const end=new Date(u.trial_ends_at);
+        const days=Math.max(0,Math.ceil((end-new Date())/(1000*60*60*24)));
+        label=`Essai · ${days}j restant${days>1?'s':''}`;
+    }
+    t.textContent=label;
+    t.className='u-tier '+u.tier;
 }
 
 /* ── FILTRES ── */
@@ -875,16 +896,60 @@ async function genCodes(){
 }
 function cpCode(code,el){navigator.clipboard.writeText(code).then(()=>{el.querySelector('.cc').textContent='✓';setTimeout(()=>el.querySelector('.cc').textContent='📋',1500)})}
 async function loadInvites(){
-    const r=await api('/api/admin/invites');if(!r.ok){toast('❌','Erreur','Chargement impossible');return}
+    const r=await api('/api/admin/invites');
+    if(!r.ok){toast('❌','Erreur','Chargement impossible');return}
     const data=await r.json(),wrap=document.getElementById('inv-table-wrap');
-    if(!data.length){wrap.innerHTML='<div style="color:var(--muted);padding:16px 0;font-size:13px">Aucun code pour le moment.</div>';return}
-    wrap.innerHTML=`<table class="inv-table"><thead><tr><th>Code</th><th>Tier</th><th>Statut</th><th>Note</th></tr></thead>
-    <tbody>${data.map(i=>`<tr>
-        <td><span style="font-family:monospace;font-weight:700;letter-spacing:1px">${i.code}</span></td>
-        <td><span class="bt ${i.tier}">${i.tier}</span></td>
-        <td>${i.is_used?'<span style="color:var(--ok);font-weight:600">✓ Utilisé</span>':'<span style="color:var(--muted)">Disponible</span>'}</td>
-        <td style="color:var(--muted)">${i.note||'—'}</td>
-    </tr>`).join('')}</tbody></table>`;
+    if(!data.length){
+        wrap.innerHTML='<div style="color:var(--muted);padding:16px 0;font-size:13px">Aucun code pour le moment.</div>';
+        return;
+    }
+    wrap.innerHTML=`<table class="inv-table">
+        <thead><tr><th style="width:30px"></th><th>Code</th><th>Tier</th><th>Statut</th><th>Note</th></tr></thead>
+        <tbody>${data.map(function(i){
+            const isMarkedManually=i.marked_manually;
+            const isUsed=i.is_used;
+            // Si utilisé par un vrai user (pas marqué manuellement), checkbox désactivée
+            const realUsed=isUsed && !isMarkedManually;
+            return `<tr class="${isUsed?'used-row':''}">
+                <td style="text-align:center">
+                    <input type="checkbox" class="invite-check" ${isUsed?'checked':''} ${realUsed?'disabled':''}
+                        onchange="toggleInviteUsed('${i.code}',this.checked,${realUsed})"
+                        title="${realUsed?'Code utilisé par un membre — non modifiable':'Cocher = marquer comme utilisé'}">
+                </td>
+                <td>
+                    ${isUsed
+                        ? `<span style="font-family:monospace;font-weight:600;color:var(--muted);text-decoration:line-through">${i.code}</span>`
+                        : `<span class="code-cell" onclick="cpCode('${i.code}',this)" title="Cliquer pour copier"><span style="font-family:monospace;font-weight:700;letter-spacing:1px">${i.code}</span> <span class="cc">📋</span></span>`
+                    }
+                </td>
+                <td><span class="bt ${i.tier}">${i.tier}</span></td>
+                <td>${isUsed
+                    ? (isMarkedManually
+                        ? '<span style="color:var(--gold);font-weight:600">⚑ Marqué utilisé</span>'
+                        : '<span style="color:var(--ok);font-weight:600">✓ Membre inscrit</span>')
+                    : '<span style="color:var(--muted)">Disponible</span>'}
+                </td>
+                <td style="color:var(--muted)">${i.note||'—'}</td>
+            </tr>`;
+        }).join('')}</tbody>
+    </table>`;
+}
+
+async function toggleInviteUsed(code,checked,realUsed){
+    if(realUsed){
+        // Code utilisé par un vrai user → on ne peut rien faire
+        toast('⚠️','Action impossible','Ce code a été utilisé par un membre');
+        return;
+    }
+    const url='/api/admin/invites/'+code+(checked?'/mark-used':'/unmark-used');
+    const r=await api(url,{method:'POST'});
+    if(!r.ok){
+        const err=await r.json().catch(()=>({}));
+        toast('❌','Erreur',err.detail||'Action impossible');
+    }else{
+        toast('✅',checked?'Code marqué comme utilisé':'Code remis disponible',code);
+    }
+    loadInvites();
 }
 
 /* ── TUTORIAL ── */
@@ -962,6 +1027,11 @@ function toast(icon,ttl,msg){
 /* ── UTILS ── */
 async function api(path,opts={}){return fetch(path,{credentials:'include',headers:{'Content-Type':'application/json'},...opts})}
 function h(s){if(s==null)return'';return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+/* ── PAIEMENT — Mode preview ── */
+function paymentSoon(){
+    toast('🔜','Mode de paiement','Mode de paiement en cours de préparation');
+}
 
 checkAuth();
 </script>
