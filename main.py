@@ -955,20 +955,19 @@ async def websocket_endpoint(websocket: WebSocket):
 # =============================================================================
 @app.get("/")
 async def index():
-    return FileResponse("static/index.html")
+    return FileResponse("index.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     """Le navigateur demande /favicon.ico à la racine — on le sert directement."""
-    path = "static/favicon.ico"
+    path = "favicon.ico"
     if os.path.isfile(path):
         return FileResponse(path, media_type="image/x-icon")
-    return FileResponse("static/logo.png", media_type="image/png")
+    return FileResponse("logo.png", media_type="image/png")
 
 
-if os.path.isdir("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 
 if __name__ == "__main__":
