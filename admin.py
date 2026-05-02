@@ -9,6 +9,7 @@ Exemples :
     python admin.py list-invites
     python admin.py list-users
     python admin.py promote alice@email.com admin       # bascule un user en admin
+    python admin.py reset-code Q1BAE735M2                # libère un code (utile si bug)
 """
 
 import asyncio
@@ -126,6 +127,31 @@ async def cmd_promote(email_or_user: str, tier: str):
         print(f"✅ {email_or_user} → tier '{tier}'")
 
 
+async def cmd_reset_code(code: str):
+    """Libère un code mal-marqué comme utilisé. Vérifie qu'aucun user ne l'utilise réellement."""
+    code = code.strip().upper()
+    async with aiosqlite.connect(DB_NAME) as db:
+        await ensure_schema(db)
+        # Vérifier que personne n'utilise vraiment ce code
+        async with db.execute(
+            "SELECT id FROM users WHERE invite_code_used = ?", (code,)
+        ) as c:
+            user_row = await c.fetchone()
+        if user_row:
+            print(f"⚠️  Le code '{code}' est lié à l'utilisateur ID {user_row[0]} — annulation.")
+            print("   Si tu veux quand même libérer ce code, supprime d'abord cet utilisateur.")
+            return
+        cursor = await db.execute(
+            "UPDATE invite_codes SET used_by = NULL, used_at = NULL WHERE code = ?",
+            (code,),
+        )
+        await db.commit()
+    if cursor.rowcount == 0:
+        print(f"❌ Code '{code}' introuvable.")
+    else:
+        print(f"✅ Code '{code}' libéré et de nouveau utilisable.")
+
+
 def usage():
     print(__doc__)
 
@@ -157,6 +183,12 @@ async def main():
             print("Usage: python admin.py promote <email_ou_pseudo> <tier>")
             return
         await cmd_promote(sys.argv[2], sys.argv[3])
+
+    elif cmd == "reset-code":
+        if len(sys.argv) < 3:
+            print("Usage: python admin.py reset-code <CODE>")
+            return
+        await cmd_reset_code(sys.argv[2])
 
     else:
         usage()
