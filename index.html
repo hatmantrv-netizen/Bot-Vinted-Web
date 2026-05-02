@@ -63,6 +63,28 @@
     .feat-txt strong{display:block;font-size:14px;font-weight:700;margin-bottom:3px}
     .feat-txt span{font-size:12px;color:var(--muted)}
 
+    /* Section Discord (landing) */
+    .discord-section{padding:60px 24px 50px;position:relative;z-index:10}
+    .discord-wrap{max-width:760px;margin:0 auto;text-align:center}
+    .discord-wrap h3{font-size:24px;font-weight:800;letter-spacing:-.5px;margin-bottom:8px}
+    .discord-wrap > p{color:var(--muted);font-size:14px;margin-bottom:26px}
+    .discord-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+    .discord-card{display:flex;align-items:center;gap:14px;padding:16px 20px;background:var(--card);
+        border:1px solid var(--border);border-radius:12px;text-decoration:none;color:var(--txt);
+        transition:all .15s;position:relative;overflow:hidden}
+    .discord-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,#5865F2 0%,transparent 60%);opacity:0;transition:opacity .2s}
+    .discord-card:hover{border-color:#5865F2;transform:translateY(-2px);box-shadow:0 8px 24px rgba(88,101,242,.2)}
+    .discord-card:hover::before{opacity:.08}
+    .discord-icon{width:48px;height:48px;background:#5865F2;border-radius:11px;display:flex;
+        align-items:center;justify-content:center;color:white;flex-shrink:0;
+        box-shadow:0 4px 12px rgba(88,101,242,.3);position:relative;z-index:1}
+    .discord-info{flex:1;text-align:left;position:relative;z-index:1}
+    .discord-info strong{display:block;font-size:14px;font-weight:700;margin-bottom:2px}
+    .discord-info span{font-size:12px;color:var(--muted)}
+    .discord-arrow{font-size:18px;color:var(--muted);transition:all .15s;position:relative;z-index:1}
+    .discord-card:hover .discord-arrow{color:#5865F2;transform:translateX(4px)}
+
+
     /* ── AUTH ── */
     #auth{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
         padding:20px;background:rgba(10,10,20,.96);backdrop-filter:blur(12px);z-index:80}
@@ -211,6 +233,11 @@
     .c-seller{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
     .s-nm{color:var(--txt);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
     .stars{color:var(--warn);font-size:11px}
+
+    /* Améliorations cartes annonces */
+    .rating-num{font-size:11px;color:var(--warn);font-weight:700;margin-left:2px}
+    .seller-new{font-size:11px;color:var(--ok);font-weight:600;font-style:italic}
+
     .c-price-row{display:flex;align-items:flex-end;justify-content:space-between;
         padding-top:8px;border-top:1px dashed var(--border);margin-top:auto}
     .pm{font-size:17px;font-weight:800;line-height:1.1}
@@ -394,6 +421,40 @@
         <div class="feat"><div class="feat-ico">📊</div><div class="feat-txt"><strong>Prix TTC calculé</strong><span>Marge visible au premier coup d'œil</span></div></div>
         <div class="feat"><div class="feat-ico">📱</div><div class="feat-txt"><strong>100% web</strong><span>Aucune installation requise</span></div></div>
     </div>
+
+    <!-- Section Discord -->
+    <section class="discord-section">
+        <div class="discord-wrap">
+            <h3>Rejoins la communauté</h3>
+            <p>Échange avec d'autres sourceurs et reste à l'affût des dernières opportunités.</p>
+            <div class="discord-cards">
+                <a href="https://discord.gg/dKv2CYRqa8" target="_blank" rel="noopener" class="discord-card">
+                    <div class="discord-icon">
+                        <svg width="28" height="28" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.4c-.6 1.1-1.4 2.7-2 3.9a54.2 54.2 0 0 0-16.3 0c-.6-1.2-1.4-2.7-2-3.9A58.4 58.4 0 0 0 10.4 4.9C1.1 19 -.7 32.7.2 46.2A58.7 58.7 0 0 0 18.2 55c1.4-2 2.7-4.1 3.7-6.3a37.7 37.7 0 0 1-5.9-2.8c.5-.4 1-.8 1.4-1.2a41.7 41.7 0 0 0 35.7 0c.5.4 1 .8 1.5 1.2-1.9 1.1-3.9 2.1-5.9 2.8 1.1 2.2 2.3 4.3 3.7 6.3A58.6 58.6 0 0 0 70.3 46.2c1-15.6-1.7-29.2-10.2-41.3zM23.7 38c-3.5 0-6.4-3.3-6.4-7.3 0-4 2.8-7.3 6.4-7.3 3.6 0 6.4 3.3 6.4 7.3s-2.9 7.3-6.4 7.3zm23.6 0c-3.5 0-6.4-3.3-6.4-7.3 0-4 2.8-7.3 6.4-7.3s6.5 3.3 6.4 7.3c0 4-2.8 7.3-6.4 7.3z" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <div class="discord-info">
+                        <strong>Brashow</strong>
+                        <span>Mon serveur officiel</span>
+                    </div>
+                    <span class="discord-arrow">→</span>
+                </a>
+                <a href="https://discord.gg/BWh8YCGftw" target="_blank" rel="noopener" class="discord-card">
+                    <div class="discord-icon">
+                        <svg width="28" height="28" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.4c-.6 1.1-1.4 2.7-2 3.9a54.2 54.2 0 0 0-16.3 0c-.6-1.2-1.4-2.7-2-3.9A58.4 58.4 0 0 0 10.4 4.9C1.1 19 -.7 32.7.2 46.2A58.7 58.7 0 0 0 18.2 55c1.4-2 2.7-4.1 3.7-6.3a37.7 37.7 0 0 1-5.9-2.8c.5-.4 1-.8 1.4-1.2a41.7 41.7 0 0 0 35.7 0c.5.4 1 .8 1.5 1.2-1.9 1.1-3.9 2.1-5.9 2.8 1.1 2.2 2.3 4.3 3.7 6.3A58.6 58.6 0 0 0 70.3 46.2c1-15.6-1.7-29.2-10.2-41.3zM23.7 38c-3.5 0-6.4-3.3-6.4-7.3 0-4 2.8-7.3 6.4-7.3 3.6 0 6.4 3.3 6.4 7.3s-2.9 7.3-6.4 7.3zm23.6 0c-3.5 0-6.4-3.3-6.4-7.3 0-4 2.8-7.3 6.4-7.3s6.5 3.3 6.4 7.3c0 4-2.8 7.3-6.4 7.3z" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <div class="discord-info">
+                        <strong>Resell Elite</strong>
+                        <span>Communauté de sourceurs</span>
+                    </div>
+                    <span class="discord-arrow">→</span>
+                </a>
+            </div>
+        </div>
+    </section>
 </div>
 
 <!-- ══ AUTH ══ -->
@@ -657,30 +718,84 @@ function setErr(m){const e=document.getElementById('aerr');e.textContent=m;e.cla
 function clearErr(){document.getElementById('aerr').classList.remove('on')}
 
 async function doLogin(e){
-    e.preventDefault();clearErr();
-    const b=document.getElementById('lbtn');b.disabled=true;b.textContent='Connexion…';
+    e.preventDefault();
+    clearErr();
+    const b=document.getElementById('lbtn');
+    b.disabled=true;
+    b.textContent='Connexion…';
     try{
-        const r=await api('/api/auth/login',{method:'POST',body:JSON.stringify({identifier:document.getElementById('lid').value,password:document.getElementById('lpw').value})});
-        if(!r.ok){setErr((await r.json().catch(()=>({}))).detail||'Identifiants invalides');return}
-        await onAuth(await r.json(),false);
-    }catch{setErr('Erreur réseau')}
-    finally{b.disabled=false;b.textContent='Se connecter'}
+        const id=document.getElementById('lid').value.trim();
+        const pw=document.getElementById('lpw').value;
+        if(!id||!pw){setErr('Email/pseudo et mot de passe requis');return}
+
+        const r=await api('/api/auth/login',{
+            method:'POST',
+            body:JSON.stringify({identifier:id,password:pw})
+        });
+
+        if(!r.ok){
+            let msg='Identifiants invalides';
+            try{
+                const err=await r.json();
+                if(err.detail)msg=typeof err.detail==='string'?err.detail:JSON.stringify(err.detail);
+            }catch(e){}
+            if(r.status===429)msg='⏳ '+msg;
+            setErr(msg);
+            return;
+        }
+
+        const user=await r.json();
+        if(!user||!user.id){setErr('Réponse serveur invalide');return}
+        await onAuth(user,false);
+    }catch(err){
+        console.error('Erreur login:',err);
+        setErr('Erreur réseau — vérifie ta connexion');
+    }finally{
+        b.disabled=false;
+        b.textContent='Se connecter';
+    }
 }
 
 async function doRegister(e){
-    e.preventDefault();clearErr();
-    const b=document.getElementById('rbtn');b.disabled=true;b.textContent='Création…';
+    e.preventDefault();
+    clearErr();
+    const b=document.getElementById('rbtn');
+    b.disabled=true;
+    b.textContent='Création…';
     try{
-        const r=await api('/api/auth/register',{method:'POST',body:JSON.stringify({
-            email:document.getElementById('remail').value,
-            username:document.getElementById('runame').value,
-            password:document.getElementById('rpw').value,
-            invite_code:document.getElementById('rinvite').value||null
-        })});
-        if(!r.ok){const err=await r.json().catch(()=>({}));setErr(typeof err.detail==='string'?err.detail:'Erreur lors de la création');return}
-        await onAuth(await r.json(),true);
-    }catch{setErr('Erreur réseau')}
-    finally{b.disabled=false;b.textContent='Créer mon compte'}
+        const email=document.getElementById('remail').value.trim();
+        const username=document.getElementById('runame').value.trim();
+        const password=document.getElementById('rpw').value;
+        const inviteCode=document.getElementById('rinvite').value.trim().toUpperCase()||null;
+
+        const r=await api('/api/auth/register',{
+            method:'POST',
+            body:JSON.stringify({email,username,password,invite_code:inviteCode})
+        });
+
+        if(!r.ok){
+            let msg='Erreur lors de la création';
+            try{
+                const err=await r.json();
+                if(err.detail){
+                    msg=typeof err.detail==='string'?err.detail:JSON.stringify(err.detail);
+                }
+            }catch(e){}
+            if(r.status===429)msg='⏳ '+msg;
+            setErr(msg);
+            return;
+        }
+
+        const user=await r.json();
+        if(!user||!user.id){setErr('Réponse serveur invalide');return}
+        await onAuth(user,true);
+    }catch(err){
+        console.error('Erreur register:',err);
+        setErr('Erreur réseau — vérifie ta connexion');
+    }finally{
+        b.disabled=false;
+        b.textContent='Créer mon compte';
+    }
 }
 
 async function onAuth(user,isNew){
@@ -815,28 +930,73 @@ function mkCard(item,isNew){
     const el=document.createElement('div');
     el.className='card'+(isNew?' new':'');el.dataset.id=item.id;
     const photos=item.photos&&item.photos.length?item.photos:(item.main_photo?[item.main_photo]:[]);
-    const stars=item.seller.feedback_count>0?'⭐'.repeat(Math.round(item.seller.rating)):'<span style="color:var(--muted)">Nouveau</span>';
+
+    // ── État avec icône & couleur selon ──
+    const status=item.status||'—';
+    let statusColor='var(--muted)',statusIcon='💎';
+    const sLow=status.toLowerCase();
+    if(sLow.includes('neuf') && sLow.includes('étiq')){statusColor='var(--ok)';statusIcon='🆕'}
+    else if(sLow.includes('neuf')){statusColor='#7dd3fc';statusIcon='✨'}
+    else if(sLow.includes('très bon')){statusColor='var(--p)';statusIcon='💎'}
+    else if(sLow.includes('bon')){statusColor='var(--warn)';statusIcon='⭐'}
+    else if(sLow.includes('satisfaisant')){statusColor='#fb923c';statusIcon='⚠️'}
+
+    // ── Avis vendeur — étoiles + score chiffré ──
+    let sellerHtml='';
+    if(item.seller.feedback_count>0){
+        const stars='⭐'.repeat(Math.max(1,Math.min(5,Math.round(item.seller.rating))));
+        sellerHtml=`<span class="stars">${stars}</span><span class="rating-num">${item.seller.rating.toFixed(1)}</span><span style="font-size:11px;color:var(--muted)">(${item.seller.feedback_count})</span>`;
+    }else{
+        sellerHtml='<span class="seller-new">🆕 Nouveau vendeur</span>';
+    }
+
     const dots=photos.length>1?photos.slice(0,5).map((_,i)=>`<span class="c-dot${i===0?' on':''}"></span>`).join(''):'';
+
     el.innerHTML=`<div class="c-img-w">
-        ${item.main_photo?`<img class="c-img" src="${item.main_photo}" alt="" loading="lazy">`:''}
+        ${item.main_photo?`<img class="c-img" src="${item.main_photo}" alt="" loading="lazy" referrerpolicy="no-referrer">`:''}
         ${isNew?'<span class="new-pill">Nouveau</span>':''}
         <span class="f-pill">${h(item.filter_name)}</span>
         ${dots?`<div class="c-thumbs">${dots}</div>`:''}
     </div>
     <div class="c-body">
         <div class="c-title">${h(item.title||'Sans titre')}</div>
-        <div class="c-tags"><span class="tag br">${h(item.brand)}</span><span class="tag">📏 ${h(item.size)}</span><span class="tag">💎 ${h(item.status)}</span></div>
-        <div class="c-seller"><span class="s-nm">${h(item.seller.login)}</span><span class="stars">${stars}</span><span style="font-size:11px">(${item.seller.feedback_count})</span></div>
-        <div class="c-price-row"><div><div class="pm">${item.price.toFixed(2)} ${item.currency}</div><div class="pttc">TTC: ${item.price_ttc.toFixed(2)} ${item.currency}</div></div><div class="cage">⌛ ${h(item.published_at)}</div></div>
+        <div class="c-tags">
+            <span class="tag br">${h(item.brand)}</span>
+            <span class="tag">📏 ${h(item.size)}</span>
+            <span class="tag" style="color:${statusColor};border-color:${statusColor}33">${statusIcon} ${h(item.status)}</span>
+        </div>
+        <div class="c-seller">
+            <span class="s-nm" title="${h(item.seller.login)}">${h(item.seller.login)}</span>
+            ${sellerHtml}
+        </div>
+        <div class="c-price-row">
+            <div>
+                <div class="pm">${item.price.toFixed(2)} ${item.currency}</div>
+                <div class="pttc">TTC: ${item.price_ttc.toFixed(2)} ${item.currency}</div>
+            </div>
+            <div class="cage">⌛ ${h(item.published_at)}</div>
+        </div>
     </div>
     <div class="c-btns">
-        <a href="${item.url}" target="_blank" rel="noopener" class="cb p">🔍 Voir</a>
-        <a href="${item.negotiate_url}" target="_blank" rel="noopener" class="cb">💬 Négocier</a>
+        <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="cb p">🔍 Voir</a>
+        <a href="${item.negotiate_url}" target="_blank" rel="noopener noreferrer" class="cb">💬 Négocier</a>
     </div>`;
+
     if(photos.length>1){
-        const img=el.querySelector('.c-img'),ds=el.querySelectorAll('.c-dot');let idx=0,iv=null;
-        el.addEventListener('mouseenter',()=>{iv=setInterval(()=>{idx=(idx+1)%Math.min(photos.length,5);img.src=photos[idx];ds.forEach((d,i)=>d.classList.toggle('on',i===idx))},800)});
-        el.addEventListener('mouseleave',()=>{clearInterval(iv);idx=0;img.src=photos[0];ds.forEach((d,i)=>d.classList.toggle('on',i===0))});
+        const img=el.querySelector('.c-img'),ds=el.querySelectorAll('.c-dot');
+        let idx=0,iv=null;
+        el.addEventListener('mouseenter',()=>{
+            iv=setInterval(()=>{
+                idx=(idx+1)%Math.min(photos.length,5);
+                img.src=photos[idx];
+                ds.forEach((d,i)=>d.classList.toggle('on',i===idx));
+            },800);
+        });
+        el.addEventListener('mouseleave',()=>{
+            clearInterval(iv);idx=0;
+            img.src=photos[0];
+            ds.forEach((d,i)=>d.classList.toggle('on',i===0));
+        });
     }
     return el;
 }
