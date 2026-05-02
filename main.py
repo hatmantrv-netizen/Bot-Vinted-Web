@@ -21,6 +21,7 @@ import aiohttp
 import aiosqlite
 import bcrypt
 import jwt
+from collections import defaultdict
 from fastapi import (
     Cookie,
     Depends,
@@ -46,6 +47,33 @@ if not SECRET_KEY:
         "⚠️  SECRET_KEY non défini, une clé temporaire a été générée. "
         "Configure SECRET_KEY dans .env pour la production !"
     )
+
+# ── RATE LIMITING simple en mémoire (IP → liste de timestamps) ──
+_rate_limit_store: dict = defaultdict(list)
+RATE_LIMIT_LOGIN = 8        # max 8 tentatives par minute
+RATE_LIMIT_REGISTER = 5     # max 5 inscriptions par 10 min par IP
+RATE_LIMIT_WINDOW_LOGIN = 60
+RATE_LIMIT_WINDOW_REGISTER = 600
+
+
+def check_rate_limit(key: str, max_attempts: int, window: int) -> bool:
+    """Retourne True si la requête peut passer, False si bloquée."""
+    now = datetime.now().timestamp()
+    timestamps = _rate_limit_store[key]
+    # On enlève les timestamps expirés
+    timestamps[:] = [t for t in timestamps if now - t < window]
+    if len(timestamps) >= max_attempts:
+        return False
+    timestamps.append(now)
+    return True
+
+
+def get_client_ip(request: Request) -> str:
+    """Récupère l'IP réelle (gère X-Forwarded-For pour Railway/Cloudflare)."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 JWT_ALGO = "HS256"
 TOKEN_EXPIRE_HOURS = 24 * 14  # 14 jours
@@ -79,9 +107,17 @@ def hash_password(plain: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
+    """Vérifie un mot de passe. Loggue les erreurs bcrypt pour debug."""
+    if not plain or not hashed:
+        return False
     try:
         return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
+    except ValueError as e:
+        # Hash corrompu en DB
+        logging.error(f"❌ bcrypt ValueError : {e}")
+        return False
+    except Exception as e:
+        logging.error(f"❌ bcrypt Exception : {type(e).__name__}: {e}")
         return False
 
 
@@ -167,60 +203,91 @@ class VintedScraper:
 
 
 def process_item(item: dict, filter_name: str, filter_id: int) -> dict:
+    """Transforme un item Vinted brut en objet propre pour l'app.
+    Tous les champs sont sécurisés contre les valeurs manquantes."""
     item_id = item.get("id")
 
-    # Temps écoulé
+    # ── Temps écoulé depuis publication ──
     published_at = "À l'instant"
+    age_seconds = None
     ts = item.get("created_at_ts") or item.get("updated_at_ts")
     if ts:
-        diff = int(datetime.now().timestamp() - float(ts))
-        if diff < 60:
-            published_at = "À l'instant"
-        elif diff < 3600:
-            published_at = f"il y a {diff // 60} min"
-        elif diff < 86400:
-            published_at = f"il y a {diff // 3600} h"
-        else:
-            published_at = f"il y a {diff // 86400} j"
+        try:
+            age_seconds = int(datetime.now().timestamp() - float(ts))
+            if age_seconds < 60:
+                published_at = "À l'instant"
+            elif age_seconds < 3600:
+                published_at = f"il y a {age_seconds // 60} min"
+            elif age_seconds < 86400:
+                published_at = f"il y a {age_seconds // 3600} h"
+            else:
+                published_at = f"il y a {age_seconds // 86400} j"
+        except (ValueError, TypeError):
+            pass
 
-    user = item.get("user", {}) or {}
-    rating = float(user.get("rating") or 0)
-    feedback_count = user.get("feedback_count", 0)
-
-    price_data = item.get("price", {}) or {}
-    price_amount = price_data.get("amount", "0.00")
-    currency = price_data.get("currency_code", "EUR")
-    currency_symbol = "€" if currency == "EUR" else currency
+    # ── Vendeur (avis & rating) ──
+    user = item.get("user") or {}
     try:
-        p = float(price_amount)
+        rating = float(user.get("rating") or 0)
+    except (ValueError, TypeError):
+        rating = 0.0
+    try:
+        feedback_count = int(user.get("feedback_count") or 0)
+    except (ValueError, TypeError):
+        feedback_count = 0
+
+    # ── Prix + TTC (frais Vinted estimés : 0,70€ + 5%) ──
+    price_data = item.get("price") or {}
+    if isinstance(price_data, dict):
+        price_amount = price_data.get("amount", "0.00")
+        currency = price_data.get("currency_code", "EUR")
+    else:
+        price_amount = price_data
+        currency = "EUR"
+    currency_symbol = "€" if currency == "EUR" else (currency or "€")
+    try:
+        p = float(price_amount or 0)
         ttc = p + 0.70 + (p * 0.05)
-    except Exception:
+    except (ValueError, TypeError):
         p, ttc = 0.0, 0.0
 
-    photos = item.get("photos", []) or []
-    main_photo = (
-        photos[0]["url"] if photos else (item.get("photo", {}) or {}).get("url")
+    # ── Photos ──
+    photos = item.get("photos") or []
+    if not isinstance(photos, list):
+        photos = []
+    all_photos = [
+        ph["url"] for ph in photos
+        if isinstance(ph, dict) and ph.get("url")
+    ]
+    main_photo = all_photos[0] if all_photos else (
+        (item.get("photo") or {}).get("url") if isinstance(item.get("photo"), dict) else None
     )
-    all_photos = [photo["url"] for photo in photos if photo.get("url")]
+
+    # ── État (neuf, très bon état, etc.) ──
+    status = item.get("status") or item.get("status_title") or "—"
+    if isinstance(status, dict):
+        status = status.get("title") or "—"
 
     return {
         "id": item_id,
-        "title": item.get("title"),
-        "url": f"https://www.vinted.fr/items/{item_id}",
-        "negotiate_url": f"https://www.vinted.fr/messages/new?item_id={item_id}",
+        "title": (item.get("title") or "Sans titre").strip(),
+        "url": f"https://www.vinted.fr/items/{item_id}" if item_id else "#",
+        "negotiate_url": f"https://www.vinted.fr/messages/new?item_id={item_id}" if item_id else "#",
         "price": round(p, 2),
         "price_ttc": round(ttc, 2),
         "currency": currency_symbol,
-        "brand": item.get("brand_title") or "—",
-        "size": item.get("size_title") or "—",
-        "status": item.get("status_title") or "—",
+        "brand": (item.get("brand_title") or "—").strip(),
+        "size": (item.get("size_title") or "—").strip(),
+        "status": str(status).strip(),
         "main_photo": main_photo,
         "photos": all_photos,
         "published_at": published_at,
+        "age_seconds": age_seconds,
         "seller": {
-            "login": user.get("login", "Inconnu"),
+            "login": (user.get("login") or "Inconnu").strip(),
             "rating": round(rating, 2),
             "feedback_count": feedback_count,
+            "feedback_reputation": user.get("feedback_reputation"),  # Note Vinted (sur 5)
         },
         "filter_id": filter_id,
         "filter_name": filter_name,
@@ -267,6 +334,13 @@ class ConnectionManager:
 # BOUCLE DE SCAN
 # =============================================================================
 async def scan_loop(app: FastAPI):
+    """
+    Boucle principale de scan. Logique :
+    1. Pour chaque filtre, vérifier s'il a déjà été initialisé
+    2. Si non (premier scan) → marquer TOUS les items existants comme déjà vus
+       sans les afficher (sinon ce sont des annonces "anciennes")
+    3. Sinon → seuls les items vraiment nouveaux passent
+    """
     while True:
         try:
             async with app.state.db.execute(
@@ -279,6 +353,36 @@ async def scan_loop(app: FastAPI):
                 if not items:
                     continue
 
+                # Vérifier si c'est le premier scan de ce filtre
+                async with app.state.db.execute(
+                    "SELECT COUNT(*) FROM seen_items WHERE filter_id = ?",
+                    (filter_id,),
+                ) as c:
+                    already_seen_count = (await c.fetchone())[0]
+
+                is_first_scan = already_seen_count == 0
+
+                if is_first_scan:
+                    # ── Premier scan : on marque tous les items comme vus sans les notifier
+                    logging.info(
+                        f"🔄 Premier scan du filtre '{name}' (id={filter_id}) — "
+                        f"marquage de {len(items)} items existants comme déjà vus."
+                    )
+                    for item in items:
+                        item_id = item.get("id")
+                        if item_id:
+                            try:
+                                await app.state.db.execute(
+                                    "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
+                                    "VALUES (?, ?, ?)",
+                                    (item_id, filter_id, datetime.now()),
+                                )
+                            except Exception as e:
+                                logging.error(f"Erreur seen_items init : {e}")
+                    await app.state.db.commit()
+                    continue  # On passe au filtre suivant, pas de notif au 1er scan
+
+                # ── Scans suivants : on cherche uniquement les NOUVEAUX items
                 for item in items[:15]:
                     item_id = item.get("id")
                     if not item_id:
@@ -290,6 +394,23 @@ async def scan_loop(app: FastAPI):
                     ) as c:
                         if await c.fetchone():
                             continue
+
+                    # Filtrage temporel additionnel : skip les items publiés il y a > 5 min
+                    # (évite les "fausses nouveautés" qui réapparaissent en haut du tri)
+                    ts = item.get("created_at_ts") or item.get("updated_at_ts")
+                    if ts:
+                        try:
+                            age_seconds = datetime.now().timestamp() - float(ts)
+                            if age_seconds > 300:  # 5 minutes
+                                # On marque comme vu mais on ne notifie pas
+                                await app.state.db.execute(
+                                    "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
+                                    "VALUES (?, ?, ?)",
+                                    (item_id, filter_id, datetime.now()),
+                                )
+                                continue
+                        except (ValueError, TypeError):
+                            pass
 
                     await app.state.db.execute(
                         "INSERT INTO seen_items (item_id, filter_id, timestamp) "
@@ -422,6 +543,27 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Vinted Sniper Web", lifespan=lifespan)
+
+
+# ── Middleware de sécurité : ajout d'en-têtes HTTP protecteurs ──
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    # Empêche le clickjacking (le site ne peut pas être affiché dans un iframe externe)
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    # Empêche le browser de "deviner" le type MIME (réduit les attaques XSS)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    # Limite l'envoi du Referer aux sites externes
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Empêche le browser de cacher les pages auth en arrière-plan
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    # Active une protection XSS basique (legacy)
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # Force HTTPS sur 1 an (uniquement si HTTPS activé)
+    if SECURE_COOKIE:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 # =============================================================================
@@ -571,7 +713,13 @@ class InviteCreate(BaseModel):
 # ROUTES AUTH
 # =============================================================================
 @app.post("/api/auth/register")
-async def register(payload: RegisterIn, response: Response):
+async def register(payload: RegisterIn, response: Response, request: Request):
+    # Rate limiting par IP : max 5 inscriptions/10min
+    ip = get_client_ip(request)
+    if not check_rate_limit(f"register:{ip}", RATE_LIMIT_REGISTER, RATE_LIMIT_WINDOW_REGISTER):
+        logging.warning(f"🚫 Rate limit register dépassé pour IP {ip}")
+        raise HTTPException(429, "Trop d'inscriptions depuis cette IP, réessaie plus tard")
+
     if not ALLOW_REGISTRATION:
         raise HTTPException(403, "Inscription désactivée")
 
@@ -591,15 +739,18 @@ async def register(payload: RegisterIn, response: Response):
     if payload.invite_code:
         code = payload.invite_code.strip().upper()
         async with db.execute(
-            "SELECT code, tier, used_by FROM invite_codes WHERE code = ?", (code,)
+            "SELECT code, tier, used_by, used_at FROM invite_codes WHERE code = ?", (code,)
         ) as c:
             row = await c.fetchone()
         if not row:
+            logging.warning(f"🎟️  Code invitation inexistant : {code}")
             raise HTTPException(400, "Code d'invitation invalide")
         if row[2] is not None:
+            logging.warning(f"🎟️  Code déjà utilisé : {code} par user_id={row[2]} le {row[3]}")
             raise HTTPException(400, "Code d'invitation déjà utilisé")
         tier = row[1]
         invite_used = code
+        logging.info(f"🎟️  Code valide utilisé à l'inscription : {code} (tier={tier})")
 
     # Admin auto par email (utile pour le 1er compte)
     if INITIAL_ADMIN_EMAIL and payload.email == INITIAL_ADMIN_EMAIL:
@@ -647,21 +798,45 @@ async def register(payload: RegisterIn, response: Response):
 
 
 @app.post("/api/auth/login")
-async def login(payload: LoginIn, response: Response):
+async def login(payload: LoginIn, response: Response, request: Request):
+    # Rate limiting par IP : max 8 tentatives/min
+    ip = get_client_ip(request)
+    if not check_rate_limit(f"login:{ip}", RATE_LIMIT_LOGIN, RATE_LIMIT_WINDOW_LOGIN):
+        logging.warning(f"🚫 Rate limit login dépassé pour IP {ip}")
+        raise HTTPException(429, "Trop de tentatives, réessaie dans 1 minute")
+
+    """Login robuste avec logs détaillés pour debug."""
     db = app.state.db
     ident = payload.identifier.strip().lower()
+    if not ident or not payload.password:
+        raise HTTPException(400, "Email/pseudo et mot de passe requis")
 
-    async with db.execute(
-        "SELECT id, email, username, password_hash, tier, trial_ends_at FROM users "
-        "WHERE email = ? OR LOWER(username) = ?",
-        (ident, ident),
-    ) as c:
-        row = await c.fetchone()
+    try:
+        async with db.execute(
+            "SELECT id, email, username, password_hash, tier, trial_ends_at FROM users "
+            "WHERE LOWER(email) = ? OR LOWER(username) = ?",
+            (ident, ident),
+        ) as c:
+            row = await c.fetchone()
+    except Exception as e:
+        logging.error(f"❌ Erreur DB login : {e}")
+        raise HTTPException(500, "Erreur serveur")
 
-    if not row or not verify_password(payload.password, row[3]):
+    if not row:
+        logging.warning(f"🔒 Login échoué : aucun user pour '{ident}'")
         raise HTTPException(401, "Identifiants invalides")
 
-    set_auth_cookie(response, row[0])
+    if not verify_password(payload.password, row[3]):
+        logging.warning(f"🔒 Login échoué : mot de passe incorrect pour user_id={row[0]}")
+        raise HTTPException(401, "Identifiants invalides")
+
+    try:
+        set_auth_cookie(response, row[0])
+    except Exception as e:
+        logging.error(f"❌ Erreur création cookie : {e}")
+        raise HTTPException(500, "Erreur serveur")
+
+    logging.info(f"✅ Login réussi : {row[2]} (id={row[0]}, tier={row[4]})")
     return {
         "id": row[0],
         "email": row[1],
@@ -955,19 +1130,20 @@ async def websocket_endpoint(websocket: WebSocket):
 # =============================================================================
 @app.get("/")
 async def index():
-    return FileResponse("index.html")
+    return FileResponse("static/index.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     """Le navigateur demande /favicon.ico à la racine — on le sert directement."""
-    path = "favicon.ico"
+    path = "static/favicon.ico"
     if os.path.isfile(path):
         return FileResponse(path, media_type="image/x-icon")
-    return FileResponse("logo.png", media_type="image/png")
+    return FileResponse("static/logo.png", media_type="image/png")
 
 
-app.mount("/", StaticFiles(directory=".", html=True), name="static")
+if os.path.isdir("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 if __name__ == "__main__":
