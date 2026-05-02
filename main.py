@@ -830,23 +830,59 @@ async def list_invites(admin: dict = Depends(require_admin)):
 
 @app.post("/api/admin/invites")
 async def create_invites(
-    payload: InviteCreate, _: dict = Depends(require_admin)
+    payload: InviteCreate, admin: dict = Depends(require_admin)
 ):
+    """
+    Génère des codes d'invitation uniques.
+    Gère :
+    - les collisions (très rare mais possible) en réessayant
+    - les tiers invalides
+    - le rollback en cas d'erreur DB
+    """
+    # Validation
     if payload.count < 1 or payload.count > 100:
         raise HTTPException(400, "Quantité entre 1 et 100")
     if payload.tier not in ("free", "accompaniment", "pro"):
-        raise HTTPException(400, "Tier invalide")
+        raise HTTPException(400, f"Tier invalide : {payload.tier!r}")
 
+    db = app.state.db
     codes = []
-    for _ in range(payload.count):
-        code = _gen_code()
-        await app.state.db.execute(
-            "INSERT INTO invite_codes (code, tier, note) VALUES (?, ?, ?)",
-            (code, payload.tier, payload.note),
-        )
-        codes.append(code)
-    await app.state.db.commit()
-    return {"codes": codes}
+    note = (payload.note or "").strip() or None
+
+    try:
+        for i in range(payload.count):
+            # Tentative max 10 fois pour générer un code unique
+            attempts = 0
+            while attempts < 10:
+                code = _gen_code()
+                try:
+                    await db.execute(
+                        "INSERT INTO invite_codes (code, tier, note) VALUES (?, ?, ?)",
+                        (code, payload.tier, note),
+                    )
+                    codes.append(code)
+                    break
+                except aiosqlite.IntegrityError:
+                    # Collision sur la PK → on retente
+                    attempts += 1
+            else:
+                # 10 collisions consécutives → impossible (chance ~ 0)
+                await db.rollback()
+                raise HTTPException(500, "Impossible de générer un code unique, réessaie")
+
+        await db.commit()
+        logging.info(f"🎟️  {len(codes)} code(s) [{payload.tier}] générés par admin {admin['username']}")
+        return {"codes": codes}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        logging.error(f"Erreur génération codes : {e}")
+        raise HTTPException(500, f"Erreur serveur : {e}")
 
 
 @app.delete("/api/admin/invites/{code}")
@@ -919,19 +955,20 @@ async def websocket_endpoint(websocket: WebSocket):
 # =============================================================================
 @app.get("/")
 async def index():
-    return FileResponse("index.html")
+    return FileResponse("static/index.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     """Le navigateur demande /favicon.ico à la racine — on le sert directement."""
-    path = "favicon.ico"
+    path = "static/favicon.ico"
     if os.path.isfile(path):
         return FileResponse(path, media_type="image/x-icon")
-    return FileResponse("logo.png", media_type="image/png")
+    return FileResponse("static/logo.png", media_type="image/png")
 
 
-app.mount("/", StaticFiles(directory=".", html=True), name="static")
+if os.path.isdir("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 if __name__ == "__main__":
