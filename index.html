@@ -237,25 +237,33 @@
         padding:5px 13px;border-radius:7px;text-transform:uppercase;letter-spacing:1px}
 
     /* PAYMENT */
-    .pay-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:22px}
-    .plan-card{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:22px;position:relative}
+    /* Pricing : grille responsive et CENTRÉE */
+    .pay-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;
+        margin:24px auto 0;max-width:920px;justify-content:center;align-items:stretch}
+    .plan-card{background:var(--card);border:1px solid var(--border);border-radius:13px;
+        padding:22px 20px;position:relative;display:flex;flex-direction:column}
     .plan-card.feat{border-color:var(--p);background:var(--ps2)}
-    .plan-badge{position:absolute;top:-9px;right:18px;background:var(--p);color:white;font-size:10px;
-        font-weight:800;padding:3px 9px;border-radius:5px;text-transform:uppercase}
+    .plan-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--p);
+        color:white;font-size:10px;font-weight:800;padding:3px 10px;border-radius:5px;
+        text-transform:uppercase;white-space:nowrap;letter-spacing:.5px}
     .plan-name{font-size:15px;font-weight:800;margin-bottom:3px}
-    .plan-price{font-size:30px;font-weight:900;color:var(--p);letter-spacing:-1px;margin:10px 0 3px}
-    .plan-price span{font-size:13px;color:var(--muted);font-weight:500}
-    .plan-desc{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+    /* Prix : tailles adaptatives + jamais de retour à la ligne */
+    .plan-price{font-size:28px;font-weight:900;color:var(--p);letter-spacing:-1px;
+        margin:10px 0 3px;line-height:1.1;white-space:nowrap;display:flex;align-items:baseline;gap:4px}
+    .plan-price.smaller{font-size:24px}
+    .plan-price span{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap}
+    .plan-desc{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5;min-height:30px}
     .plan-feats{list-style:none;display:flex;flex-direction:column;gap:7px;margin-bottom:18px}
     .plan-feats li{font-size:12px;display:flex;align-items:center;gap:7px}
     .plan-feats li::before{content:'✓';color:var(--p);font-weight:800}
     .plan-feats li.no::before{content:'✕';color:var(--muted)}
     .plan-feats li.no{color:var(--muted)}
     .plan-btn{width:100%;padding:10px;border-radius:8px;font-weight:700;font-size:13px;cursor:not-allowed;
-        border:1px solid var(--border);background:var(--bg2);color:var(--muted);display:flex;align-items:center;justify-content:center;gap:7px}
+        border:1px solid var(--border);background:var(--bg2);color:var(--muted);display:flex;
+        align-items:center;justify-content:center;gap:7px;margin-top:auto}
     .plan-card.feat .plan-btn{background:var(--p);border-color:var(--p);color:white}
-    .pay-soon{margin-top:26px;background:var(--card);border:1px solid var(--border);border-radius:12px;
-        padding:18px 22px;display:flex;align-items:center;gap:14px}
+    .pay-soon{margin:26px auto 0;max-width:920px;background:var(--card);border:1px solid var(--border);
+        border-radius:12px;padding:18px 22px;display:flex;align-items:center;gap:14px}
     .pay-soon .ps-ico{font-size:26px}
     .pay-soon h4{font-weight:700;font-size:14px;margin-bottom:3px}
     .pay-soon p{font-size:12px;color:var(--muted);line-height:1.5}
@@ -528,7 +536,7 @@
                 <div class="plan-card feat">
                     <div class="plan-badge">RECOMMANDÉ</div>
                     <div class="plan-name">⚡ Pro</div>
-                    <div class="plan-price">5-10 €<span>/mois</span></div>
+                    <div class="plan-price smaller">5–10€<span>/mois</span></div>
                     <div class="plan-desc" style="font-style:italic">Prix non-défini — fixé au lancement.</div>
                     <ul class="plan-feats">
                         <li>Utilisations illimitées</li>
@@ -537,7 +545,7 @@
                         <li>Alertes temps réel</li>
                         <li>Support prioritaire</li>
                     </ul>
-                    <button class="plan-btn" onclick="paymentSoon()">🔜 Choisir Pro</button>
+                    <button class="plan-btn" style="cursor:pointer" onclick="paymentSoon()">🔜 Choisir Pro</button>
                 </div>
                 <div class="plan-card">
                     <div class="plan-name">🆓 Gratuit (après essai)</div>
@@ -845,6 +853,11 @@ const COMING={
     ebooks:{icon:'📚',ttl:'Ebooks',sub:'Guides téléchargeables.',txt:'Des ebooks complets pour maîtriser la revente Vinted de A à Z. Arrive bientôt.'}
 };
 function goTab(tab){
+    // Sécurité : seul un admin peut accéder à la section admin
+    if(tab==='admin' && (!S.user || S.user.tier!=='admin')){
+        toast('🚫','Accès refusé','Section réservée aux administrateurs');
+        tab='all';
+    }
     S.tab=tab;markTab();
     ['feed-view','coming-view','payment-view','admin-view'].forEach(id=>document.getElementById(id).classList.add('hidden'));
     const ttl=document.getElementById('pgttl'),sub=document.getElementById('pgsub');
@@ -883,16 +896,65 @@ setInterval(()=>{if(ws&&ws.readyState===1)ws.send('ping')},25000);
 
 /* ── ADMIN ── */
 async function genCodes(){
-    const count=parseInt(document.getElementById('inv-count').value)||5;
+    // Sanity check : on doit être admin
+    if(!S.user || S.user.tier!=='admin'){
+        toast('🚫','Accès refusé','Action réservée aux administrateurs');
+        return;
+    }
+
+    const countRaw=document.getElementById('inv-count').value;
+    const count=parseInt(countRaw,10);
     const tier=document.getElementById('inv-tier').value;
     const note=document.getElementById('inv-note').value.trim();
-    const r=await api('/api/admin/invites',{method:'POST',body:JSON.stringify({count,tier,note:note||null})});
-    if(!r.ok){toast('❌','Erreur','Impossible de générer');return}
+
+    // Validation locale avant l'envoi
+    if(!count || count<1 || count>50){
+        toast('⚠️','Quantité invalide','Entre 1 et 50');
+        return;
+    }
+    if(!['accompaniment','pro','free'].includes(tier)){
+        toast('⚠️','Tier invalide',tier);
+        return;
+    }
+
+    let r;
+    try{
+        r=await api('/api/admin/invites',{
+            method:'POST',
+            body:JSON.stringify({count,tier,note:note||null})
+        });
+    }catch(e){
+        toast('❌','Erreur réseau','Impossible de joindre le serveur');
+        console.error(e);
+        return;
+    }
+
+    if(!r.ok){
+        // Récupère le vrai message du backend
+        let msg='Erreur '+r.status;
+        try{
+            const err=await r.json();
+            msg=typeof err.detail==='string'?err.detail:JSON.stringify(err.detail||err);
+        }catch(e){}
+        toast('❌','Génération impossible',msg);
+        console.error('Erreur génération codes:',r.status,msg);
+        return;
+    }
+
     const data=await r.json();
+    if(!data.codes || !data.codes.length){
+        toast('⚠️','Aucun code généré','Réponse serveur vide');
+        return;
+    }
+
     const box=document.getElementById('codes-box'),list=document.getElementById('codes-list');
     document.getElementById('codes-title').textContent=`${data.codes.length} code(s) [${tier}] — clique pour copier`;
     list.innerHTML=data.codes.map(c=>`<span class="code-pill" onclick="cpCode('${c}',this)"><span>${c}</span><span class="cc">📋</span></span>`).join('');
-    box.classList.add('on');toast('✅',`${data.codes.length} codes créés`,tier);
+    box.classList.add('on');
+    toast('✅',`${data.codes.length} codes créés`,tier);
+
+    // Recharger la liste auto pour voir les nouveaux codes
+    loadInvites();
 }
 function cpCode(code,el){navigator.clipboard.writeText(code).then(()=>{el.querySelector('.cc').textContent='✓';setTimeout(()=>el.querySelector('.cc').textContent='📋',1500)})}
 async function loadInvites(){
