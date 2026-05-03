@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vinted Sniper — Trouve les meilleures affaires avant tout le monde</title>
-    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=7">
+    <link rel="shortcut icon" href="/favicon.ico?v=7">
+    <link rel="apple-touch-icon" href="/static/logo.png?v=7">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -398,7 +400,7 @@
 <div id="landing">
     <nav class="l-nav">
         <div class="l-nav-logo">
-            <img src="/static/logo.png" alt="Vinted Sniper">
+            <img src="/static/logo.png?v=7" alt="Vinted Sniper">
             <span>Vinted Sniper</span>
         </div>
         <button class="l-nav-login" onclick="showAuth('login')">Se connecter →</button>
@@ -462,7 +464,7 @@
     <div class="auth-card">
         <button class="auth-back" onclick="showLanding()">← Retour</button>
         <div class="auth-logo">
-            <img src="/static/logo.png" alt="">
+            <img src="/static/logo.png?v=7" alt="">
             <div><h2>Vinted Sniper</h2><p>Surveillance temps réel</p></div>
         </div>
         <div class="a-tabs">
@@ -515,7 +517,7 @@
 <div id="app" class="app hidden">
     <aside class="sb" id="sb">
         <div class="sb-logo">
-            <img src="/static/logo.png" alt="">
+            <img src="/static/logo.png?v=7" alt="">
             <div><h1>Vinted Sniper</h1><p>Surveillance temps réel</p></div>
         </div>
         <div class="nav-sec" id="vinted-sec">
@@ -811,7 +813,13 @@ async function doLogout(){
     if(!confirm('Se déconnecter ?'))return;
     if(ws)try{ws.close()}catch(e){}
     await api('/api/auth/logout',{method:'POST'});
-    S.user=null;S.filters=[];S.items=[];showLanding();
+    S.user=null;S.filters=[];S.items=[];
+
+    // Cacher la sidebar admin (sécurité au cas où l'écran resterait visible)
+    const adminNav=document.getElementById('admin-nav');
+    if(adminNav){adminNav.classList.add('hidden');adminNav.style.display='none';}
+
+    showLanding();
 }
 
 async function checkAuth(){
@@ -839,8 +847,20 @@ async function finishSetup(skip=false){
 
 /* ── APP ── */
 async function launchApp(){
-    showScr('app');renderUser();
-    if(S.user&&S.user.tier==='admin')document.getElementById('admin-nav').classList.remove('hidden');
+    showScr('app');
+    renderUser();
+
+    // ══ Sidebar admin : on RÉINITIALISE l'état à chaque connexion
+    // (sinon un compte pro qui se reconnecte après un compte admin garde l'admin-nav visible)
+    const adminNav=document.getElementById('admin-nav');
+    if(S.user && S.user.tier==='admin'){
+        adminNav.classList.remove('hidden');
+        adminNav.style.display='';  // Au cas où display:none aurait été appliqué
+    }else{
+        adminNav.classList.add('hidden');
+        adminNav.style.display='none';  // Force le masquage absolu
+    }
+
     await Promise.all([fetchFilters(),fetchItems()]);
     connectWS();
     // Tuto : uniquement si jamais fait ET si c'est une vraie 1ère connexion (flag sessionStorage)
@@ -974,7 +994,7 @@ function mkCard(item,isNew){
                 <div class="pm">${item.price.toFixed(2)} ${item.currency}</div>
                 <div class="pttc">TTC: ${item.price_ttc.toFixed(2)} ${item.currency}</div>
             </div>
-            <div class="cage">⌛ ${h(item.published_at)}</div>
+            <div class="cage" style="${(item.age_seconds!=null && item.age_seconds<300)?'color:var(--ok);font-weight:600':''}">⌛ ${h(item.published_at)}</div>
         </div>
     </div>
     <div class="c-btns">
