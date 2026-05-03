@@ -92,6 +92,12 @@ TRIAL_DURATION_DAYS = int(os.getenv("TRIAL_DURATION_DAYS", 7))
 MAX_FILTERS_FREE = int(os.getenv("MAX_FILTERS_FREE", 3))
 TRIAL_TIERS = ("trial", "pro", "accompaniment", "admin")  # Reçoivent les notifs WS temps réel
 
+# ══ FILTRAGE TEMPOREL STRICT (anti-vieilles-annonces) ══
+# Une annonce n'est considérée "nouvelle" que si elle a été créée dans les X dernières secondes.
+# Vinted remonte parfois des annonces de plusieurs MOIS quand le vendeur les "boost".
+# Avec cette limite, on rejette ces fausses nouveautés.
+MAX_ITEM_AGE_SECONDS = int(os.getenv("MAX_ITEM_AGE_SECONDS", 600))  # 10 minutes par défaut
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -144,41 +150,62 @@ def decode_token(token: Optional[str]) -> Optional[int]:
 # SCRAPER VINTED
 # =============================================================================
 class VintedScraper:
+    """Scraper Vinted robuste avec gestion d'erreurs et rotation de sessions."""
+
     def __init__(self):
         self.session: Optional[aiohttp.ClientSession] = None
         self.headers = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
             ),
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "fr-FR,fr;q=0.9",
             "Referer": "https://www.vinted.fr/",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "X-Requested-With": "XMLHttpRequest",
         }
         self.cookies = None
+        self.cookies_fetched_at = None
+        self.fail_count = 0
+        self.lock = asyncio.Lock()  # Protection contre les races sur cookies
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self.session is None or self.session.closed:
             self.session = aiohttp.ClientSession(
                 headers=self.headers,
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=12),
+                connector=aiohttp.TCPConnector(limit=10, ttl_dns_cache=300),
             )
         return self.session
 
-    async def fetch_cookies(self):
-        try:
-            session = await self._get_session()
-            async with session.get("https://www.vinted.fr/") as resp:
-                self.cookies = resp.cookies
-                logging.info("🍪 Cookies Vinted actualisés.")
-        except Exception as e:
-            logging.error(f"Erreur cookies : {e}")
+    async def fetch_cookies(self, force=False):
+        """Récupère / rafraîchit les cookies Vinted (toutes les 30 min ou en cas d'échec)."""
+        async with self.lock:
+            # Évite les requêtes en parallèle pour récupérer les cookies
+            if not force and self.cookies_fetched_at:
+                age = (datetime.now() - self.cookies_fetched_at).total_seconds()
+                if age < 1800:  # 30 minutes
+                    return
+            try:
+                session = await self._get_session()
+                async with session.get("https://www.vinted.fr/", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    self.cookies = resp.cookies
+                    self.cookies_fetched_at = datetime.now()
+                    self.fail_count = 0
+                    logging.info("🍪 Cookies Vinted actualisés.")
+            except Exception as e:
+                logging.error(f"Erreur cookies : {e}")
 
     async def fetch_items(self, url: str) -> list:
+        """Récupère les items d'une URL de recherche Vinted."""
         if self.cookies is None:
             await self.fetch_cookies()
         session = await self._get_session()
 
+        # Convertir l'URL catalog → API v2
         api_url = (
             url.replace("vinted.fr/catalog", "vinted.fr/api/v2/catalog/items")
             if "api/v2" not in url else url
@@ -187,14 +214,27 @@ class VintedScraper:
         try:
             async with session.get(api_url, cookies=self.cookies) as resp:
                 if resp.status in (401, 403):
-                    await self.fetch_cookies()
+                    logging.warning(f"⚠️  Vinted rejette ({resp.status}), refresh cookies")
+                    await self.fetch_cookies(force=True)
                     return []
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data.get("items", [])
-                return []
+                if resp.status == 429:
+                    self.fail_count += 1
+                    logging.warning(f"⚠️  Rate limit Vinted (429), pause prolongée")
+                    await asyncio.sleep(min(30, 5 * self.fail_count))
+                    return []
+                if resp.status != 200:
+                    logging.warning(f"⚠️  Vinted status {resp.status}")
+                    return []
+
+                data = await resp.json()
+                items = data.get("items", [])
+                self.fail_count = 0
+                return items
+        except asyncio.TimeoutError:
+            logging.warning(f"⏱️  Timeout fetch Vinted")
+            return []
         except Exception as e:
-            logging.error(f"Erreur fetch : {e}")
+            logging.error(f"❌ Erreur fetch : {type(e).__name__}: {e}")
             return []
 
     async def close(self):
@@ -202,28 +242,89 @@ class VintedScraper:
             await self.session.close()
 
 
+def _extract_real_creation_ts(item: dict) -> Optional[float]:
+    """
+    Détermine le timestamp de CRÉATION RÉELLE d'une annonce Vinted.
+
+    Vinted expose plusieurs champs et c'est piégeux :
+    - photo.high_resolution.timestamp → le plus fiable (timestamp de la 1ère photo upload)
+    - created_at_ts → souvent absent
+    - updated_at_ts → BIAISÉ : modifié quand le vendeur boost/modifie l'annonce
+                      C'est pour ça qu'on récupère des annonces de 9 mois en haut du tri "newest"
+
+    On prend le PLUS ANCIEN parmi les sources disponibles pour avoir l'âge réel.
+    """
+    candidates = []
+
+    # Source 1 : photo.high_resolution.timestamp (le plus fiable)
+    photo = item.get("photo") or {}
+    if isinstance(photo, dict):
+        hr = photo.get("high_resolution") or {}
+        if isinstance(hr, dict) and hr.get("timestamp"):
+            try:
+                candidates.append(float(hr["timestamp"]))
+            except (ValueError, TypeError):
+                pass
+
+    # Source 2 : photos[0].high_resolution.timestamp (si plusieurs photos)
+    photos = item.get("photos") or []
+    if isinstance(photos, list) and photos:
+        first = photos[0]
+        if isinstance(first, dict):
+            hr = first.get("high_resolution") or {}
+            if isinstance(hr, dict) and hr.get("timestamp"):
+                try:
+                    candidates.append(float(hr["timestamp"]))
+                except (ValueError, TypeError):
+                    pass
+
+    # Source 3 : created_at_ts (rarement présent)
+    if item.get("created_at_ts"):
+        try:
+            candidates.append(float(item["created_at_ts"]))
+        except (ValueError, TypeError):
+            pass
+
+    # On retourne le plus ANCIEN (= date de création réelle, pas le boost)
+    return min(candidates) if candidates else None
+
+
 def process_item(item: dict, filter_name: str, filter_id: int) -> dict:
     """Transforme un item Vinted brut en objet propre pour l'app.
     Tous les champs sont sécurisés contre les valeurs manquantes."""
     item_id = item.get("id")
 
-    # ── Temps écoulé depuis publication ──
-    published_at = "À l'instant"
+    # ── Détermination de l'âge réel de l'annonce ──
+    # Vinted expose plusieurs timestamps :
+    #  - photo.high_resolution.timestamp = timestamp de création RÉELLE (le plus fiable)
+    #  - created_at_ts = peut être absent
+    #  - updated_at_ts = mis à jour quand le vendeur "boost" / modifie l'annonce
+    # On prend le plus ancien disponible (= date de création réelle)
     age_seconds = None
-    ts = item.get("created_at_ts") or item.get("updated_at_ts")
-    if ts:
+    real_ts = _extract_real_creation_ts(item)
+    if real_ts is not None:
         try:
-            age_seconds = int(datetime.now().timestamp() - float(ts))
-            if age_seconds < 60:
-                published_at = "À l'instant"
-            elif age_seconds < 3600:
-                published_at = f"il y a {age_seconds // 60} min"
-            elif age_seconds < 86400:
-                published_at = f"il y a {age_seconds // 3600} h"
-            else:
-                published_at = f"il y a {age_seconds // 86400} j"
+            age_seconds = int(datetime.now().timestamp() - float(real_ts))
+            if age_seconds < 0:
+                age_seconds = 0
         except (ValueError, TypeError):
-            pass
+            age_seconds = None
+
+    # Affichage humain
+    if age_seconds is None:
+        published_at = "Récent"
+    elif age_seconds < 60:
+        published_at = "À l'instant"
+    elif age_seconds < 3600:
+        published_at = f"il y a {age_seconds // 60} min"
+    elif age_seconds < 86400:
+        published_at = f"il y a {age_seconds // 3600} h"
+    elif age_seconds < 86400 * 30:
+        published_at = f"il y a {age_seconds // 86400} j"
+    elif age_seconds < 86400 * 365:
+        published_at = f"il y a {age_seconds // (86400 * 30)} mois"
+    else:
+        published_at = f"il y a {age_seconds // (86400 * 365)} an(s)"
 
     # ── Vendeur (avis & rating) ──
     user = item.get("user") or {}
@@ -382,12 +483,17 @@ async def scan_loop(app: FastAPI):
                     await app.state.db.commit()
                     continue  # On passe au filtre suivant, pas de notif au 1er scan
 
-                # ── Scans suivants : on cherche uniquement les NOUVEAUX items
-                for item in items[:15]:
+                # ── Scans suivants : SEULES LES VRAIES NOUVEAUTÉS PASSENT ──
+                new_items_count = 0
+                rejected_old_count = 0
+                rejected_no_ts_count = 0
+
+                for item in items[:20]:
                     item_id = item.get("id")
                     if not item_id:
                         continue
 
+                    # Déjà vu ?
                     async with app.state.db.execute(
                         "SELECT 1 FROM seen_items WHERE item_id = ? AND filter_id = ?",
                         (item_id, filter_id),
@@ -395,23 +501,44 @@ async def scan_loop(app: FastAPI):
                         if await c.fetchone():
                             continue
 
-                    # Filtrage temporel additionnel : skip les items publiés il y a > 5 min
-                    # (évite les "fausses nouveautés" qui réapparaissent en haut du tri)
-                    ts = item.get("created_at_ts") or item.get("updated_at_ts")
-                    if ts:
-                        try:
-                            age_seconds = datetime.now().timestamp() - float(ts)
-                            if age_seconds > 300:  # 5 minutes
-                                # On marque comme vu mais on ne notifie pas
-                                await app.state.db.execute(
-                                    "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
-                                    "VALUES (?, ?, ?)",
-                                    (item_id, filter_id, datetime.now()),
-                                )
-                                continue
-                        except (ValueError, TypeError):
-                            pass
+                    # ════════════════════════════════════════════════════════════
+                    # FILTRE TEMPOREL STRICT : on REJETTE tout ce qui est trop vieux
+                    # ════════════════════════════════════════════════════════════
+                    real_ts = _extract_real_creation_ts(item)
 
+                    if real_ts is None:
+                        # Pas de timestamp fiable → on REJETTE par sécurité
+                        # (anciennement on laissait passer = bug d'annonces de 3 ans)
+                        rejected_no_ts_count += 1
+                        await app.state.db.execute(
+                            "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
+                            "VALUES (?, ?, ?)",
+                            (item_id, filter_id, datetime.now()),
+                        )
+                        continue
+
+                    age = datetime.now().timestamp() - float(real_ts)
+                    # Limite stricte : annonce postée dans les MAX_ITEM_AGE_SECONDS dernières secondes
+                    if age > MAX_ITEM_AGE_SECONDS:
+                        rejected_old_count += 1
+                        await app.state.db.execute(
+                            "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
+                            "VALUES (?, ?, ?)",
+                            (item_id, filter_id, datetime.now()),
+                        )
+                        continue
+
+                    if age < 0:
+                        # Timestamp dans le futur (improbable mais sécurité)
+                        await app.state.db.execute(
+                            "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
+                            "VALUES (?, ?, ?)",
+                            (item_id, filter_id, datetime.now()),
+                        )
+                        continue
+
+                    # ✅ ITEM VRAIMENT NOUVEAU
+                    new_items_count += 1
                     await app.state.db.execute(
                         "INSERT INTO seen_items (item_id, filter_id, timestamp) "
                         "VALUES (?, ?, ?)",
@@ -439,7 +566,16 @@ async def scan_loop(app: FastAPI):
                         await app.state.manager.send_to_user(
                             user_id, {"type": "new_item", "item": processed}
                         )
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.15)
+
+                # Log résumé de scan (pour debug)
+                if new_items_count or rejected_old_count or rejected_no_ts_count:
+                    logging.info(
+                        f"📊 Filtre '{name}' (id={filter_id}) : "
+                        f"{new_items_count} nouveau(x), "
+                        f"{rejected_old_count} ancien(s) rejeté(s), "
+                        f"{rejected_no_ts_count} sans-ts rejeté(s)"
+                    )
 
         except asyncio.CancelledError:
             break
@@ -1130,19 +1266,39 @@ async def websocket_endpoint(websocket: WebSocket):
 # =============================================================================
 @app.get("/")
 async def index():
-    return FileResponse("index.html")
+    return FileResponse("static/index.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     """Le navigateur demande /favicon.ico à la racine — on le sert directement."""
-    path = "favicon.ico"
+    path = "static/favicon.ico"
     if os.path.isfile(path):
-        return FileResponse(path, media_type="image/x-icon")
-    return FileResponse("logo.png", media_type="image/png")
+        return FileResponse(
+            path,
+            media_type="image/x-icon",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    if os.path.isfile("static/logo.png"):
+        return FileResponse("static/logo.png", media_type="image/png")
+    raise HTTPException(404, "Favicon introuvable")
 
 
-app.mount("/", StaticFiles(directory=".", html=True), name="static")
+# Endpoint dédié pour le logo (mêmes raisons que favicon : éviter cache buggé)
+@app.get("/logo", include_in_schema=False)
+async def logo_redirect():
+    """Logo sur la racine pour fiabilité (sert depuis /static/logo.png)."""
+    if os.path.isfile("static/logo.png"):
+        return FileResponse(
+            "static/logo.png",
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    raise HTTPException(404, "Logo introuvable")
+
+
+if os.path.isdir("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 if __name__ == "__main__":
