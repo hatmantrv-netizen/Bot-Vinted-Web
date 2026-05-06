@@ -1266,21 +1266,21 @@ async def websocket_endpoint(websocket: WebSocket):
 # =============================================================================
 @app.get("/")
 async def index():
-    return FileResponse("static/index.html")
+    return FileResponse("index.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     """Le navigateur demande /favicon.ico à la racine — on le sert directement."""
-    path = "static/favicon.ico"
+    path = "favicon.ico"
     if os.path.isfile(path):
         return FileResponse(
             path,
             media_type="image/x-icon",
             headers={"Cache-Control": "public, max-age=86400"},
         )
-    if os.path.isfile("static/logo.png"):
-        return FileResponse("static/logo.png", media_type="image/png")
+    if os.path.isfile("logo.png"):
+        return FileResponse("logo.png", media_type="image/png")
     raise HTTPException(404, "Favicon introuvable")
 
 
@@ -1288,17 +1288,16 @@ async def favicon():
 @app.get("/logo", include_in_schema=False)
 async def logo_redirect():
     """Logo sur la racine pour fiabilité (sert depuis /static/logo.png)."""
-    if os.path.isfile("static/logo.png"):
+    if os.path.isfile("logo.png"):
         return FileResponse(
-            "static/logo.png",
+            "logo.png",
             media_type="image/png",
             headers={"Cache-Control": "public, max-age=86400"},
         )
     raise HTTPException(404, "Logo introuvable")
 
 
-if os.path.isdir("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 
 if __name__ == "__main__":
