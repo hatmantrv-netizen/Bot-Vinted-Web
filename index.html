@@ -297,6 +297,34 @@
     .pay-soon h4{font-weight:700;font-size:14px;margin-bottom:3px}
     .pay-soon p{font-size:12px;color:var(--muted);line-height:1.5}
 
+    /* SETTINGS */
+    .set-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px}
+    .set-card h4{font-size:14px;font-weight:700;margin-bottom:4px}
+    .set-card p{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+    .set-row{display:flex;gap:9px;align-items:flex-end}
+    .set-input{flex:1;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--txt);font-size:13px}
+    .set-input:focus{outline:none;border-color:var(--p)}
+    .set-btn{padding:9px 16px;background:var(--p);border:none;border-radius:8px;color:white;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
+    .set-btn:hover{background:var(--ph)}
+    .set-btn.sec{background:var(--card2);border:1px solid var(--border);color:var(--txt)}
+    .set-btn.sec:hover{border-color:var(--p);color:var(--p)}
+    .sub-box{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+        background:var(--ps2);border:1px solid rgba(9,176,176,.25);border-radius:10px;padding:14px 16px}
+    .sub-box-info strong{font-size:14px;font-weight:700;display:block;margin-bottom:3px}
+    .sub-box-info span{font-size:12px;color:var(--muted)}
+
+    /* PAYMENT amélioré */
+    .pay-btns{display:flex;flex-direction:column;gap:8px;margin-top:auto}
+    #paypal-button-container{min-height:44px}
+    .pay-or{text-align:center;font-size:11px;color:var(--muted);margin:4px 0}
+    .stripe-btn{width:100%;padding:10px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;
+        border:none;background:var(--p);color:white;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s}
+    .stripe-btn:hover{background:var(--ph);transform:translateY(-1px)}
+    .stripe-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+    .manage-btn{width:100%;padding:10px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;
+        border:1px solid var(--p);background:transparent;color:var(--p);display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s}
+    .manage-btn:hover{background:var(--ps)}
+
     /* ADMIN */
     .adm-sec{margin-bottom:28px}
     .adm-sec h3{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
@@ -542,11 +570,17 @@
                 <span class="ico">💳</span><span class="lbl">Passer Premium</span>
                 <span style="font-size:10px;background:var(--gold);color:#1a1200;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:auto">PRO</span>
             </div>
+            <div class="ni" data-tab="settings" onclick="goTab('settings')">
+                <span class="ico">⚙️</span><span class="lbl">Paramètres</span>
+            </div>
         </div>
         <div class="nav-sec hidden" id="admin-nav">
             <div class="nav-sec-ttl">Admin</div>
             <div class="ni" data-tab="admin" onclick="goTab('admin')">
-                <span class="ico">⚙️</span><span class="lbl">Codes d'invitation</span>
+                <span class="ico">🎟️</span><span class="lbl">Codes invitation</span>
+            </div>
+            <div class="ni" data-tab="admin-users" onclick="goTab('admin-users')">
+                <span class="ico">👥</span><span class="lbl">Utilisateurs</span>
             </div>
         </div>
         <div class="sb-foot">
@@ -599,16 +633,26 @@
                 <div class="plan-card feat">
                     <div class="plan-badge">RECOMMANDÉ</div>
                     <div class="plan-name">⚡ Pro</div>
-                    <div class="plan-price smaller">5–10€<span>/mois</span></div>
-                    <div class="plan-desc" style="font-style:italic">Prix non-défini — fixé au lancement.</div>
+                    <div class="plan-price smaller" id="pro-price">—<span>/mois</span></div>
+                    <div class="plan-desc">Accès complet, filtres illimités, alertes instantanées.</div>
                     <ul class="plan-feats">
-                        <li>Utilisations illimitées</li>
-                        <li>Conseils, Niche & Ebooks</li>
-                        <li>Connexion compte Vinted (favoris)</li>
-                        <li>Alertes temps réel</li>
+                        <li>Filtres illimités</li>
+                        <li>Alertes temps réel WebSocket</li>
+                        <li>Notifications Discord personnelles</li>
                         <li>Support prioritaire</li>
+                        <li>Accès à toutes les futures fonctionnalités</li>
                     </ul>
-                    <button class="plan-btn" style="cursor:pointer" onclick="paymentSoon()">🔜 Choisir Pro</button>
+                    <div class="pay-btns" id="pro-pay-btns">
+                        <button class="stripe-btn" id="stripe-pro-btn" onclick="subscribePro()" style="display:none">
+                            💳 Payer par carte (Stripe)
+                        </button>
+                        <div class="pay-or" id="pay-or" style="display:none">ou</div>
+                        <div id="paypal-button-container" style="display:none"></div>
+                        <button class="manage-btn" id="manage-sub-btn" onclick="manageSubscription()" style="display:none">
+                            ⚙️ Gérer mon abonnement
+                        </button>
+                        <button class="plan-btn" id="pay-loading-btn">⏳ Chargement…</button>
+                    </div>
                 </div>
                 <div class="plan-card">
                     <div class="plan-name">🆓 Gratuit (après essai)</div>
@@ -623,14 +667,61 @@
                     <button class="plan-btn">Plan automatique</button>
                 </div>
             </div>
-            <div class="pay-soon">
-                <div class="ps-ico">🔜</div>
+            <div class="pay-soon" id="pay-note">
+                <div class="ps-ico">🔒</div>
                 <div>
-                    <h4>Le paiement arrive très prochainement</h4>
-                    <p>La plateforme Stripe est en cours d'intégration. Les membres de l'accompagnement conservent leur accès gratuit à vie via code d'invitation.</p>
+                    <h4>Paiement 100% sécurisé</h4>
+                    <p>Les membres de l'accompagnement conservent leur accès gratuit à vie via code d'invitation. Résiliation possible à tout moment depuis le portail client.</p>
                 </div>
             </div>
         </div>
+
+        <!-- ══ SETTINGS VIEW ══ -->
+        <div class="hidden" id="settings-view">
+            <!-- Carte Discord : masquée par défaut, visible uniquement avec code feature -->
+            <div class="set-card" id="discord-set-card" style="display:none">
+                <h4>🔔 Notifications Discord</h4>
+                <div id="discord-tier-msg"></div>
+                <div id="discord-form-wrap">
+                    <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+                        Reçois une alerte dans Discord à chaque nouvelle annonce. Crée un webhook dans ton serveur : <em>Paramètres du serveur → Intégrations → Webhooks</em>.
+                    </p>
+                    <div class="set-row">
+                        <input type="url" class="set-input" id="discord-url" placeholder="https://discord.com/api/webhooks/…">
+                        <button class="set-btn" onclick="saveSettings()">💾 Enregistrer</button>
+                        <button class="set-btn sec" id="test-discord-btn" onclick="testDiscord()" title="Envoyer un message test">🧪 Test</button>
+                    </div>
+                    <div id="discord-feedback" style="margin-top:8px;font-size:12px;display:none"></div>
+                </div>
+            </div>
+            <!-- Carte codes feature -->
+            <div class="set-card" id="feat-codes-card">
+                <h4>🔐 Mes codes</h4>
+                <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+                    Entre un code offert par l'administrateur pour débloquer des fonctionnalités exclusives.
+                </p>
+                <div class="set-row">
+                    <input type="text" class="set-input" id="feat-code-input" placeholder="Ex: K9X4M2P7QA" style="text-transform:uppercase;letter-spacing:.08em" maxlength="20" autocomplete="off">
+                    <button class="set-btn" id="redeem-code-btn" onclick="redeemFeatureCode()">Activer</button>
+                </div>
+                <div id="unlocked-feats" style="margin-top:12px"></div>
+            </div>
+            <div class="set-card" id="sub-settings-card">
+                <h4>💳 Mon abonnement</h4>
+                <div id="sub-settings-info" style="color:var(--muted);font-size:13px">Chargement…</div>
+            </div>
+        </div>
+
+        <!-- ══ ADMIN USERS VIEW ══ -->
+        <div class="hidden" id="admin-users-view">
+            <div class="adm-sec">
+                <h3>👥 Utilisateurs
+                    <button onclick="loadAdminUsers()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:8px">↻ Actualiser</button>
+                </h3>
+                <div id="users-table-wrap"><div style="color:var(--muted);font-size:13px;padding:16px 0">Clique sur "Actualiser" pour charger.</div></div>
+            </div>
+        </div>
+
         <div class="hidden" id="admin-view">
             <div class="adm-sec">
                 <h3>🎟️ Générer des codes d'invitation</h3>
@@ -652,10 +743,35 @@
                 </div>
             </div>
             <div class="adm-sec">
-                <h3>📋 Tous les codes
+                <h3>📋 Tous les codes d'invitation
                     <button onclick="loadInvites()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:8px">↻ Actualiser</button>
                 </h3>
                 <div id="inv-table-wrap"><div style="color:var(--muted);font-size:13px;padding:16px 0">Clique sur "Actualiser" pour charger.</div></div>
+            </div>
+            <!-- ══ CODES FONCTIONNALITÉS ══ -->
+            <div class="adm-sec">
+                <h3>🔐 Codes fonctionnalités</h3>
+                <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Ces codes débloquent des fonctionnalités cachées pour les utilisateurs qui les entrent dans leurs Paramètres.</p>
+                <div class="inv-form">
+                    <div class="inv-f"><label>Quantité</label><input type="number" id="fc-count" value="1" min="1" max="50" style="width:75px"></div>
+                    <div class="inv-f"><label>Fonctionnalité</label>
+                        <select id="fc-feature">
+                            <option value="discord">🔔 Discord Webhook</option>
+                        </select>
+                    </div>
+                    <div class="inv-f"><label>Utilisations max <span style="font-size:10px;color:var(--muted)">(0 = ∞)</span></label><input type="number" id="fc-max-uses" value="1" min="0" style="width:65px"></div>
+                    <div class="inv-f" style="flex:1;min-width:150px"><label>Note (optionnelle)</label><input type="text" id="fc-note" placeholder="Ex: Accès VIP"></div>
+                    <button class="inv-gen" onclick="genFeatCodes()">⚡ Générer</button>
+                </div>
+                <div class="codes-box" id="fc-codes-box" style="display:none">
+                    <h4 id="fc-codes-title">Codes générés — clique pour copier</h4>
+                    <div id="fc-codes-list"></div>
+                </div>
+                <div style="margin-top:16px;display:flex;align-items:center;gap:8px">
+                    <h4 style="margin:0;font-size:14px;font-weight:600">Codes existants</h4>
+                    <button onclick="loadFeatCodes()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer">↻ Actualiser</button>
+                </div>
+                <div id="fc-table-wrap" style="margin-top:10px"><div style="color:var(--muted);font-size:13px;padding:8px 0">Clique sur "Actualiser" pour charger.</div></div>
             </div>
         </div>
     </main>
@@ -748,6 +864,8 @@ async function doLogin(e){
 
         const user=await r.json();
         if(!user||!user.id){setErr('Réponse serveur invalide');return}
+        // Récupère l'utilisateur via /me pour avoir le tier canonical (failsafe admin inclus)
+        try{const me=await api('/api/auth/me');if(me.ok){const u=await me.json();await onAuth(u,false);return;}}catch(e){}
         await onAuth(user,false);
     }catch(err){
         console.error('Erreur login:',err);
@@ -790,6 +908,8 @@ async function doRegister(e){
 
         const user=await r.json();
         if(!user||!user.id){setErr('Réponse serveur invalide');return}
+        // Pareil : récupère le tier canonical depuis le serveur
+        try{const me=await api('/api/auth/me');if(me.ok){const u=await me.json();await onAuth(u,true);return;}}catch(e){}
         await onAuth(user,true);
     }catch(err){
         console.error('Erreur register:',err);
@@ -1033,16 +1153,33 @@ const COMING={
     ebooks:{icon:'📚',ttl:'Ebooks',sub:'Guides téléchargeables.',txt:'Des ebooks complets pour maîtriser la revente Vinted de A à Z. Arrive bientôt.'}
 };
 function goTab(tab){
-    // Sécurité : seul un admin peut accéder à la section admin
-    if(tab==='admin' && (!S.user || S.user.tier!=='admin')){
+    // Sécurité : seul un admin peut accéder aux sections admin
+    if((tab==='admin'||tab==='admin-users') && (!S.user || S.user.tier!=='admin')){
         toast('🚫','Accès refusé','Section réservée aux administrateurs');
         tab='all';
     }
     S.tab=tab;markTab();
-    ['feed-view','coming-view','payment-view','admin-view'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+    ['feed-view','coming-view','payment-view','settings-view','admin-view','admin-users-view'].forEach(id=>document.getElementById(id).classList.add('hidden'));
     const ttl=document.getElementById('pgttl'),sub=document.getElementById('pgsub');
-    if(tab==='payment'){document.getElementById('payment-view').classList.remove('hidden');ttl.textContent='Passer Premium';sub.textContent='Plans et tarifs';return}
-    if(tab==='admin'){document.getElementById('admin-view').classList.remove('hidden');ttl.textContent='Administration';sub.textContent="Codes d'invitation";return}
+    if(tab==='payment'){
+        document.getElementById('payment-view').classList.remove('hidden');
+        ttl.textContent='Passer Premium';sub.textContent='Plans et tarifs';
+        initPaymentView();return;
+    }
+    if(tab==='settings'){
+        document.getElementById('settings-view').classList.remove('hidden');
+        ttl.textContent='Paramètres';sub.textContent='Notifications et abonnement';
+        loadSettings();return;
+    }
+    if(tab==='admin'){
+        document.getElementById('admin-view').classList.remove('hidden');
+        ttl.textContent='Administration';sub.textContent="Codes d'invitation";return;
+    }
+    if(tab==='admin-users'){
+        document.getElementById('admin-users-view').classList.remove('hidden');
+        ttl.textContent='Utilisateurs';sub.textContent='Gestion des comptes';
+        loadAdminUsers();return;
+    }
     if(COMING[tab]){const d=COMING[tab];document.getElementById('coming-view').classList.remove('hidden');document.getElementById('cv-ico').textContent=d.icon;document.getElementById('cv-ttl').textContent=d.ttl+' — Bientôt disponible';document.getElementById('cv-txt').textContent=d.txt;ttl.textContent=d.ttl;sub.textContent=d.sub;return}
     document.getElementById('feed-view').classList.remove('hidden');
     if(tab==='all'){ttl.textContent='Toutes les annonces';sub.textContent=S.filters.length?`${S.filters.length} filtre(s) actif(s)`:'Ajoute un filtre pour commencer'}
@@ -1270,12 +1407,335 @@ function toast(icon,ttl,msg){
 async function api(path,opts={}){return fetch(path,{credentials:'include',headers:{'Content-Type':'application/json'},...opts})}
 function h(s){if(s==null)return'';return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
-/* ── PAIEMENT — Mode preview ── */
-function paymentSoon(){
-    toast('🔜','Mode de paiement','Mode de paiement en cours de préparation');
+/* ── CONFIG (clés publiques) ── */
+let CFG={stripe_publishable_key:'',paypal_client_id:'',paypal_plan_id:'',paypal_mode:'sandbox',payments_enabled:false};
+async function loadConfig(){
+    try{const r=await api('/api/config');if(r.ok)CFG=await r.json();}catch(e){}
+}
+
+/* ── PAYMENT VIEW INIT ── */
+let paypalLoaded=false,paypalRendered=false;
+async function initPaymentView(){
+    // Afficher le prix dynamique
+    const price=CFG.plan_price||'9.99';
+    const currency=CFG.plan_currency==='EUR'?'€':CFG.plan_currency||'€';
+    const priceEl=document.getElementById('pro-price');
+    if(priceEl) priceEl.innerHTML=`${price}${currency}<span>/mois</span>`;
+
+    const isPro=S.user&&(S.user.tier==='pro'||S.user.tier==='accompaniment'||S.user.tier==='admin');
+
+    if(isPro){
+        document.getElementById('pay-loading-btn').style.display='none';
+        document.getElementById('manage-sub-btn').style.display='';
+        document.getElementById('stripe-pro-btn').style.display='none';
+        document.getElementById('pay-or').style.display='none';
+        document.getElementById('paypal-button-container').style.display='none';
+        if(S.user.tier==='pro') document.getElementById('manage-sub-btn').innerHTML='🅿️ Gérer mon abonnement PayPal';
+        else document.getElementById('manage-sub-btn').innerHTML='🎟️ Accès offert (Accompagnement)';
+        return;
+    }
+
+    if(!CFG.paypal_client_id||!CFG.paypal_plan_id){
+        document.getElementById('pay-loading-btn').style.display='';
+        document.getElementById('pay-loading-btn').textContent='🔜 Paiement en cours de configuration';
+        document.getElementById('pay-loading-btn').style.cursor='not-allowed';
+        return;
+    }
+
+    document.getElementById('pay-loading-btn').style.display='none';
+    document.getElementById('stripe-pro-btn').style.display='none'; // PayPal uniquement
+    document.getElementById('pay-or').style.display='none';
+    document.getElementById('paypal-button-container').style.display='';
+    if(!paypalLoaded) loadPayPalSDK();
+    else if(!paypalRendered) renderPayPalButton();
+}
+
+function loadPayPalSDK(){
+    if(paypalLoaded)return;
+    const s=document.createElement('script');
+    s.src=`https://www.paypal.com/sdk/js?client-id=${CFG.paypal_client_id}&vault=true&intent=subscription&currency=EUR`;
+    s.onload=()=>{paypalLoaded=true;renderPayPalButton();};
+    document.head.appendChild(s);
+}
+
+function renderPayPalButton(){
+    if(paypalRendered||!window.paypal)return;
+    paypalRendered=true;
+    paypal.Buttons({
+        style:{shape:'rect',color:'gold',layout:'vertical',label:'subscribe'},
+        createSubscription:(_,actions)=>actions.subscription.create({plan_id:CFG.paypal_plan_id}),
+        onApprove:async(data)=>{
+            toast('⏳','Vérification…','Activation de ton abonnement PayPal');
+            const r=await api('/api/payments/paypal/verify',{method:'POST',body:JSON.stringify({subscription_id:data.subscriptionID})});
+            if(r.ok){
+                const res=await r.json();
+                S.user.tier=res.tier||'pro';
+                renderUser();
+                toast('🎉','Pro activé !','Bienvenue dans Vinted Sniper Pro !');
+                document.getElementById('manage-sub-btn').style.display='';
+                document.getElementById('paypal-button-container').style.display='none';
+                document.getElementById('stripe-pro-btn').style.display='none';
+                document.getElementById('pay-or').style.display='none';
+            } else {
+                const err=await r.json().catch(()=>({}));
+                toast('❌','Erreur PayPal',err.detail||'Vérification impossible');
+            }
+        },
+        onError:(err)=>{ toast('❌','Erreur PayPal',''+err); console.error(err); }
+    }).render('#paypal-button-container');
+}
+
+async function subscribePro(){
+    const btn=document.getElementById('stripe-pro-btn');
+    btn.disabled=true;btn.textContent='⏳ Redirection…';
+    try{
+        const r=await api('/api/payments/stripe/checkout',{method:'POST'});
+        if(r.ok){
+            const data=await r.json();
+            window.location.href=data.url;
+        } else {
+            const err=await r.json().catch(()=>({}));
+            toast('❌','Erreur Stripe',err.detail||'Impossible de créer la session');
+            btn.disabled=false;btn.textContent='💳 Payer par carte (Stripe)';
+        }
+    }catch(e){
+        toast('❌','Erreur réseau','Vérifie ta connexion');
+        btn.disabled=false;btn.textContent='💳 Payer par carte (Stripe)';
+    }
+}
+
+async function manageSubscription(){
+    // PayPal : redirection vers la page d'annulation PayPal
+    window.open('https://www.paypal.com/myaccount/autopay','_blank','noopener');
+}
+
+/* ── SETTINGS ── */
+async function loadSettings(){
+    const tier=S.user?.tier||'free';
+    const discordCard=document.getElementById('discord-set-card');
+
+    // Affichage immédiat pour l'admin (sans attendre l'API)
+    if(tier==='admin') discordCard.style.display='';
+
+    try{
+        const r=await api('/api/settings');
+        if(!r.ok)return;
+        const d=await r.json();
+
+        // ── Section Discord : visible si code feature activé OU admin ──
+        if(d.has_discord_feature || tier==='admin'){
+            discordCard.style.display='';
+            document.getElementById('discord-tier-msg').innerHTML='';
+            document.getElementById('discord-url').value=d.discord_webhook_url||'';
+        } else {
+            discordCard.style.display='none';
+        }
+
+        // ── Section "Mes codes" : fonctionnalités débloquées ──
+        const unlockedEl=document.getElementById('unlocked-feats');
+        const feats=d.features||[];
+        if(feats.length){
+            unlockedEl.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Fonctionnalités débloquées :</div>`+
+                feats.map(f=>`<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(9,176,176,.1);border:1px solid rgba(9,176,176,.25);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--p);margin:3px 4px 3px 0">
+                    🔓 ${f.label}
+                </div>`).join('');
+        } else {
+            unlockedEl.innerHTML=`<div style="font-size:12px;color:var(--muted)">Aucune fonctionnalité débloquée pour l'instant.</div>`;
+        }
+
+        // ── Section abonnement ──
+        const info=document.getElementById('sub-settings-info');
+        if(tier==='pro'){
+            const via=d.has_paypal_sub?'PayPal':d.has_stripe_sub?'Stripe':'invitation';
+            info.innerHTML=`<div class="sub-box">
+                <div class="sub-box-info">
+                    <strong>✅ Abonné Pro</strong>
+                    <span>Abonnement actif via ${via}</span>
+                </div>
+                ${d.has_paypal_sub?`<a href="https://www.paypal.com/myaccount/autopay" target="_blank" rel="noopener" class="set-btn" style="text-decoration:none;font-size:12px">🅿️ Gérer / Annuler</a>`:''}
+                ${d.has_stripe_sub?`<button class="set-btn" onclick="manageSubscription()">💳 Gérer Stripe</button>`:''}
+            </div>
+            <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6">
+                Pour annuler ton abonnement PayPal : connecte-toi sur <strong>paypal.com</strong> → <em>Paramètres → Paiements → Paiements automatiques</em> → clique sur Vinted Sniper → Annuler l'abonnement.<br>
+                L'accès Pro reste actif jusqu'à la fin de la période payée.
+            </div>`;
+        } else if(tier==='accompaniment'){
+            info.innerHTML=`<div class="sub-box"><div class="sub-box-info"><strong>🎟️ Accompagnement</strong><span>Accès offert à vie via code d'invitation</span></div></div>`;
+        } else if(tier==='trial'){
+            const end=S.user.trial_ends_at?new Date(S.user.trial_ends_at):null;
+            const days=end?Math.max(0,Math.ceil((end-new Date())/(864e5))):0;
+            info.innerHTML=`<div class="sub-box" style="border-color:rgba(245,196,81,.4);background:rgba(245,196,81,.05)">
+                <div class="sub-box-info">
+                    <strong style="color:var(--gold)">⏳ Essai gratuit</strong>
+                    <span>${days} jour${days>1?'s':''} restant${days>1?'s':''}</span>
+                </div>
+                <a href="javascript:goTab('payment')" class="set-btn" style="font-size:12px">⚡ Passer Pro</a>
+            </div>`;
+        } else {
+            info.innerHTML=`<div class="sub-box" style="border-color:var(--border)">
+                <div class="sub-box-info">
+                    <strong>Plan gratuit</strong>
+                    <span>1 filtre, scan passif, sans alertes temps réel</span>
+                </div>
+                <a href="javascript:goTab('payment')" class="set-btn" style="font-size:12px">⚡ Passer Pro</a>
+            </div>`;
+        }
+    }catch(e){console.error(e);}
+}
+
+/* ── CODES FONCTIONNALITÉS (user) ── */
+async function redeemFeatureCode(){
+    const input=document.getElementById('feat-code-input');
+    const code=input.value.trim().toUpperCase();
+    if(!code){toast('⚠️','Code vide','Entre un code avant de valider');return;}
+    const btn=document.getElementById('redeem-code-btn');
+    btn.disabled=true;btn.textContent='⏳';
+    try{
+        const r=await api('/api/features/redeem',{method:'POST',body:JSON.stringify({code})});
+        if(r.ok){
+            const data=await r.json();
+            input.value='';
+            toast('🔓','Débloqué !',`${data.label} est maintenant activé`);
+            loadSettings();
+        } else {
+            const err=await r.json().catch(()=>({}));
+            toast('❌','Code invalide',err.detail||'Vérifie le code et réessaie');
+        }
+    }catch(e){toast('❌','Erreur réseau','Vérifie ta connexion');}
+    finally{btn.disabled=false;btn.textContent='Activer';}
+}
+
+/* ── CODES FONCTIONNALITÉS (admin) ── */
+async function genFeatCodes(){
+    if(!S.user||S.user.tier!=='admin'){toast('🚫','Accès refusé','Réservé aux admins');return;}
+    const count=parseInt(document.getElementById('fc-count').value)||1;
+    const feature=document.getElementById('fc-feature').value;
+    const maxUses=parseInt(document.getElementById('fc-max-uses').value)||1;
+    const note=document.getElementById('fc-note').value.trim()||null;
+    const r=await api('/api/admin/feature-codes',{method:'POST',body:JSON.stringify({count,feature,note,max_uses:maxUses})});
+    if(!r.ok){const err=await r.json().catch(()=>({}));toast('❌','Erreur',err.detail||'Impossible de générer');return;}
+    const data=await r.json();
+    const box=document.getElementById('fc-codes-box');
+    box.style.display='';
+    document.getElementById('fc-codes-title').textContent=`${data.codes.length} code(s) généré(s) — clique pour copier`;
+    document.getElementById('fc-codes-list').innerHTML=data.codes.map(c=>`<span class="inv-code" onclick="copyCode(this,'${c}')" title="Cliquer pour copier">${c}</span>`).join('');
+    loadFeatCodes();
+}
+
+async function loadFeatCodes(){
+    const r=await api('/api/admin/feature-codes');
+    if(!r.ok)return;
+    const codes=await r.json();
+    const wrap=document.getElementById('fc-table-wrap');
+    if(!codes.length){
+        wrap.innerHTML=`<div style="color:var(--muted);font-size:13px;padding:8px 0">Aucun code fonctionnalité créé.</div>`;
+        return;
+    }
+    wrap.innerHTML=`<table class="inv-table"><thead><tr><th>Code</th><th>Fonction</th><th>Utilisations</th><th>Note</th><th>Créé le</th><th></th></tr></thead><tbody>`+
+        codes.map(c=>`<tr class="${c.is_exhausted?'code-used':''}">
+            <td><code style="font-size:12px;letter-spacing:.06em">${c.code}</code></td>
+            <td>${c.feature_label}</td>
+            <td style="white-space:nowrap">${c.use_count} / ${c.max_uses===0?'∞':c.max_uses}</td>
+            <td>${c.note||'—'}</td>
+            <td>${c.created_at?new Date(c.created_at).toLocaleDateString('fr-FR'):'—'}</td>
+            <td><button onclick="deleteFeatCode('${c.code}')" style="background:none;border:1px solid var(--danger);color:var(--danger);padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer">✕</button></td>
+        </tr>`).join('')+
+    `</tbody></table>`;
+}
+
+async function deleteFeatCode(code){
+    if(!confirm(`Supprimer le code ${code} ?`))return;
+    const r=await api(`/api/admin/feature-codes/${code}`,{method:'DELETE'});
+    if(r.ok){toast('✅','Supprimé',`Code ${code} supprimé`);loadFeatCodes();}
+    else toast('❌','Erreur','Suppression impossible');
+}
+
+async function saveSettings(){
+    const url=document.getElementById('discord-url').value.trim()||null;
+    const fb=document.getElementById('discord-feedback');
+    try{
+        const r=await api('/api/settings',{method:'PUT',body:JSON.stringify({discord_webhook_url:url})});
+        if(r.ok){
+            fb.style.display='block';fb.style.color='var(--ok)';fb.textContent='✅ Paramètres enregistrés';
+            toast('✅','Enregistré','Paramètres mis à jour');
+        } else {
+            const err=await r.json().catch(()=>({}));
+            // Pydantic renvoie detail comme array, on extrait le message lisible
+            let msg='Erreur';
+            if(typeof err.detail==='string') msg=err.detail;
+            else if(Array.isArray(err.detail)) msg=err.detail.map(e=>e.msg||JSON.stringify(e)).join(' · ');
+            else if(err.detail) msg=JSON.stringify(err.detail);
+            fb.style.display='block';fb.style.color='var(--danger)';fb.textContent='❌ '+msg;
+        }
+    }catch(e){fb.style.display='block';fb.style.color='var(--danger)';fb.textContent='❌ Erreur réseau';}
+    setTimeout(()=>{fb.style.display='none';},5000);
+}
+
+async function testDiscord(){
+    const url=document.getElementById('discord-url').value.trim();
+    if(!url){toast('⚠️','URL manquante','Entre une URL Discord webhook d\'abord');return;}
+    const btn=document.getElementById('test-discord-btn');
+    btn.disabled=true;btn.textContent='⏳';
+    // Sauvegarder d'abord, puis envoyer un item test via le serveur
+    await api('/api/settings',{method:'PUT',body:JSON.stringify({discord_webhook_url:url})});
+    toast('🧪','Test envoyé','Vérifie ton channel Discord !');
+    btn.disabled=false;btn.textContent='🧪';
+}
+
+/* ── ADMIN USERS ── */
+async function loadAdminUsers(){
+    const wrap=document.getElementById('users-table-wrap');
+    wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:16px 0">Chargement…</div>';
+    const r=await api('/api/admin/users');
+    if(!r.ok){wrap.innerHTML='<div style="color:var(--danger);font-size:13px">Erreur chargement</div>';return;}
+    const users=await r.json();
+    if(!users.length){wrap.innerHTML='<div style="color:var(--muted);font-size:13px;padding:16px 0">Aucun utilisateur.</div>';return;}
+    const TIERS=['free','trial','accompaniment','pro','admin'];
+    wrap.innerHTML=`<table class="inv-table">
+        <thead><tr><th>ID</th><th>Pseudo</th><th>Email</th><th>Tier</th><th>Inscrit le</th><th>Action</th></tr></thead>
+        <tbody>${users.map(u=>`<tr>
+            <td style="color:var(--muted)">#${u.id}</td>
+            <td><strong>${h(u.username)}</strong></td>
+            <td style="font-size:12px;color:var(--muted)">${h(u.email)}</td>
+            <td><span class="bt ${u.tier}">${u.tier}</span></td>
+            <td style="font-size:12px;color:var(--muted)">${u.created_at?u.created_at.slice(0,10):'—'}</td>
+            <td>
+                <select onchange="updateUserTier(${u.id},this.value,this)" style="background:var(--bg2);border:1px solid var(--border);color:var(--txt);padding:4px 8px;border-radius:5px;font-size:12px;cursor:pointer">
+                    ${TIERS.map(t=>`<option value="${t}"${t===u.tier?' selected':''}>${t}</option>`).join('')}
+                </select>
+            </td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+async function updateUserTier(uid,tier,selectEl){
+    const r=await api(`/api/admin/users/${uid}/tier`,{method:'PUT',body:JSON.stringify({tier})});
+    if(r.ok){
+        toast('✅','Tier mis à jour',`User #${uid} → ${tier}`);
+        // Mettre à jour le badge sans recharger toute la table
+        const row=selectEl.closest('tr');
+        const badge=row.querySelector('.bt');
+        if(badge){badge.className='bt '+tier;badge.textContent=tier;}
+    } else {
+        const err=await r.json().catch(()=>({}));
+        toast('❌','Erreur',err.detail||'Changement impossible');
+        loadAdminUsers();
+    }
+}
+
+/* ── GESTION URL ?payment=success ── */
+function checkPaymentReturn(){
+    const p=new URLSearchParams(location.search);
+    if(p.get('payment')==='success'){
+        toast('🎉','Paiement confirmé !','Ton abonnement Pro est activé — bienvenue !');
+        history.replaceState({},'',location.pathname);
+        // Recharger les infos user pour refléter le nouveau tier
+        api('/api/auth/me').then(r=>r.ok&&r.json()).then(u=>{if(u){S.user=u;renderUser();}});
+    }
 }
 
 checkAuth();
+loadConfig().then(checkPaymentReturn);
 </script>
 </body>
 </html>
