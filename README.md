@@ -45,24 +45,6 @@ Puis ouvre **http://localhost:8000**.
 
 ---
 
-## 🎟️ Donner un accès gratuit (accompagnement)
-
-### Option simple (CLI)
-```bash
-# Générer 5 codes pour ton accompagnement
-python admin.py invite 5 accompaniment "Promo Avril 2026"
-
-# Lister tous les codes
-python admin.py list-invites
-
-# Lister les utilisateurs
-python admin.py list-users
-
-# Promouvoir un user manuellement
-python admin.py promote alice@email.com accompaniment
-```
-
-Tu reçois une liste de codes (ex: `K9X4M2P7QA`). Tu les donnes à tes membres → ils les saisissent au moment de l'inscription → ils ont automatiquement le tier `accompaniment`.
 
 ### Option API (admin connecté)
 Si tu te connectes avec l'email défini dans `INITIAL_ADMIN_EMAIL`, tu deviens admin et peux utiliser :
