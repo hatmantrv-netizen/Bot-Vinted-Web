@@ -17,10 +17,21 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
+# Charger le fichier .env automatiquement (résout le bug de clé temporaire + admin)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 import aiohttp
 import aiosqlite
 import bcrypt
 import jwt
+try:
+    import stripe as stripe_sdk
+except ImportError:
+    stripe_sdk = None
 from collections import defaultdict
 from fastapi import (
     Cookie,
@@ -81,6 +92,7 @@ COOKIE_NAME = "vsw_session"
 SECURE_COOKIE = os.getenv("SECURE_COOKIE", "false").lower() == "true"
 
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", 20))  # Délai entre scans (en secondes)
+SCAN_CONCURRENCY = int(os.getenv("SCAN_CONCURRENCY", 3))  # Filtres traités en parallèle
 DB_NAME = os.getenv("DB_NAME", "vinted_sniper.db")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8000))
@@ -89,14 +101,42 @@ ALLOW_REGISTRATION = os.getenv("ALLOW_REGISTRATION", "true").lower() == "true"
 
 # Limites par tier
 TRIAL_DURATION_DAYS = int(os.getenv("TRIAL_DURATION_DAYS", 7))
-MAX_FILTERS_FREE = int(os.getenv("MAX_FILTERS_FREE", 3))
+MAX_FILTERS_FREE   = int(os.getenv("MAX_FILTERS_FREE",   1))   # Gratuit après essai : 1 filtre
+MAX_FILTERS_TRIAL  = int(os.getenv("MAX_FILTERS_TRIAL",  3))   # Essai 7 jours : 3 filtres
 TRIAL_TIERS = ("trial", "pro", "accompaniment", "admin")  # Reçoivent les notifs WS temps réel
+
+# Plan tarifaire
+PLAN_PRICE    = os.getenv("PLAN_PRICE", "9.99")
+PLAN_CURRENCY = os.getenv("PLAN_CURRENCY", "EUR")
 
 # ══ FILTRAGE TEMPOREL STRICT (anti-vieilles-annonces) ══
 # Une annonce n'est considérée "nouvelle" que si elle a été créée dans les X dernières secondes.
 # Vinted remonte parfois des annonces de plusieurs MOIS quand le vendeur les "boost".
 # Avec cette limite, on rejette ces fausses nouveautés.
 MAX_ITEM_AGE_SECONDS = int(os.getenv("MAX_ITEM_AGE_SECONDS", 600))  # 10 minutes par défaut
+
+# =============================================================================
+# STRIPE CONFIGURATION
+# =============================================================================
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID", "")
+STRIPE_SUCCESS_URL = os.getenv("STRIPE_SUCCESS_URL", "http://localhost:8000/?payment=success")
+STRIPE_CANCEL_URL = os.getenv("STRIPE_CANCEL_URL", "http://localhost:8000/?payment=cancelled")
+
+# =============================================================================
+# PAYPAL CONFIGURATION
+# =============================================================================
+PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "")
+PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "")
+PAYPAL_PLAN_ID = os.getenv("PAYPAL_PLAN_ID", "")
+PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID", "")
+PAYPAL_MODE = os.getenv("PAYPAL_MODE", "sandbox")
+PAYPAL_API_BASE = (
+    "https://api-m.sandbox.paypal.com" if PAYPAL_MODE == "sandbox"
+    else "https://api-m.paypal.com"
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -177,7 +217,7 @@ class VintedScraper:
             self.session = aiohttp.ClientSession(
                 headers=self.headers,
                 timeout=aiohttp.ClientTimeout(total=12),
-                connector=aiohttp.TCPConnector(limit=10, ttl_dns_cache=300),
+                connector=aiohttp.TCPConnector(limit=25, ttl_dns_cache=300),
             )
         return self.session
 
@@ -287,6 +327,71 @@ def _extract_real_creation_ts(item: dict) -> Optional[float]:
 
     # On retourne le plus ANCIEN (= date de création réelle, pas le boost)
     return min(candidates) if candidates else None
+
+
+async def send_discord_webhook(webhook_url: str, item: dict):
+    """Envoie une notification Discord rich embed pour un nouvel item Vinted."""
+    try:
+        age = item.get("age_seconds")
+        color = 0x00FF88 if (age is not None and age < 120) else 0x09B0B0
+        embed = {
+            "title": (item.get("title") or "Nouvelle annonce")[:256],
+            "url": item.get("url", ""),
+            "color": color,
+            "fields": [
+                {
+                    "name": "💰 Prix",
+                    "value": f"{item['price']:.2f} {item['currency']} *(TTC: {item['price_ttc']:.2f} €)*",
+                    "inline": True,
+                },
+                {"name": "🏷️ Marque", "value": item.get("brand") or "—", "inline": True},
+                {"name": "📏 Taille", "value": item.get("size") or "—", "inline": True},
+                {"name": "💎 État", "value": item.get("status") or "—", "inline": True},
+                {"name": "⌛ Publié", "value": item.get("published_at", "Récent"), "inline": True},
+                {"name": "🔍 Filtre", "value": item.get("filter_name", "—"), "inline": True},
+            ],
+            "footer": {
+                "text": f"Vinted Sniper • {item.get('seller', {}).get('login', '?')} "
+                        f"({item.get('seller', {}).get('feedback_count', 0)} avis)"
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if item.get("main_photo"):
+            embed["thumbnail"] = {"url": item["main_photo"]}
+
+        payload = {
+            "username": "Vinted Sniper 🔍",
+            "embeds": [embed],
+            "components": [
+                {
+                    "type": 1,
+                    "components": [
+                        {
+                            "type": 2,
+                            "style": 5,
+                            "label": "🛒 Voir l'annonce",
+                            "url": item.get("url", "https://vinted.fr"),
+                        },
+                        {
+                            "type": 2,
+                            "style": 5,
+                            "label": "💬 Négocier",
+                            "url": item.get("negotiate_url", "https://vinted.fr"),
+                        },
+                    ],
+                }
+            ],
+        }
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                webhook_url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=6),
+            ) as resp:
+                if resp.status not in (200, 204):
+                    logging.warning(f"Discord webhook erreur {resp.status}")
+    except Exception as exc:
+        logging.error(f"Discord webhook échec: {exc}")
 
 
 def process_item(item: dict, filter_name: str, filter_id: int) -> dict:
@@ -434,14 +539,130 @@ class ConnectionManager:
 # =============================================================================
 # BOUCLE DE SCAN
 # =============================================================================
+async def _scan_filter(app: FastAPI, filter_id: int, user_id: int, url: str, name: str, sem: asyncio.Semaphore):
+    """
+    Traite un seul filtre :
+    - Premier scan → marque tous les items comme vus sans notifier
+    - Scans suivants → charge les seen_ids en batch, rejette les vieux, notifie les nouveaux
+    """
+    async with sem:
+        items = await app.state.scraper.fetch_items(url)
+        if not items:
+            return
+
+        # ── Premier scan ? (1 requête COUNT au lieu de N requêtes SELECT) ──
+        async with app.state.db.execute(
+            "SELECT COUNT(*) FROM seen_items WHERE filter_id = ?", (filter_id,)
+        ) as c:
+            already_seen_count = (await c.fetchone())[0]
+
+        if already_seen_count == 0:
+            logging.info(
+                f"🔄 Premier scan du filtre '{name}' (id={filter_id}) — "
+                f"marquage de {len(items)} items existants comme déjà vus."
+            )
+            batch = [
+                (item.get("id"), filter_id, datetime.now())
+                for item in items if item.get("id")
+            ]
+            if batch:
+                await app.state.db.executemany(
+                    "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) VALUES (?, ?, ?)",
+                    batch,
+                )
+                await app.state.db.commit()
+            return
+
+        # ── Chargement en batch de TOUS les seen_ids du filtre (élimine le N+1) ──
+        async with app.state.db.execute(
+            "SELECT item_id FROM seen_items WHERE filter_id = ?", (filter_id,)
+        ) as c:
+            seen_ids: set = {row[0] for row in await c.fetchall()}
+
+        # ── Tier utilisateur (1 requête par filtre, pas par item) ──
+        async with app.state.db.execute(
+            "SELECT tier, discord_webhook_url FROM users WHERE id = ?", (user_id,)
+        ) as c:
+            urow = await c.fetchone()
+        user_tier = urow[0] if urow else "free"
+        discord_url = urow[1] if urow else None
+
+        new_items_count = 0
+        rejected_old_count = 0
+        rejected_no_ts_count = 0
+
+        new_seen_batch: list = []
+        new_cache_batch: list = []
+        new_item_payloads: list = []
+
+        now = datetime.now()
+
+        for item in items[:20]:
+            item_id = item.get("id")
+            if not item_id or item_id in seen_ids:
+                continue
+
+            real_ts = _extract_real_creation_ts(item)
+
+            if real_ts is None:
+                rejected_no_ts_count += 1
+                new_seen_batch.append((item_id, filter_id, now))
+                continue
+
+            age = now.timestamp() - float(real_ts)
+
+            if age > MAX_ITEM_AGE_SECONDS or age < 0:
+                if age > 0:
+                    rejected_old_count += 1
+                new_seen_batch.append((item_id, filter_id, now))
+                continue
+
+            # ✅ Item vraiment nouveau
+            new_items_count += 1
+            new_seen_batch.append((item_id, filter_id, now))
+            processed = process_item(item, name, filter_id)
+            new_cache_batch.append((item_id, user_id, filter_id, json.dumps(processed)))
+            new_item_payloads.append(processed)
+
+        # ── Insertions en batch (1 commit par filtre) ──
+        if new_seen_batch:
+            await app.state.db.executemany(
+                "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) VALUES (?, ?, ?)",
+                new_seen_batch,
+            )
+        if new_cache_batch:
+            await app.state.db.executemany(
+                "INSERT INTO items_cache (item_id, user_id, filter_id, data) VALUES (?, ?, ?, ?)",
+                new_cache_batch,
+            )
+        if new_seen_batch or new_cache_batch:
+            await app.state.db.commit()
+
+        # ── Notifications WS + Discord (tiers payants uniquement) ──
+        if user_tier in TRIAL_TIERS:
+            for processed in new_item_payloads:
+                await app.state.manager.send_to_user(
+                    user_id, {"type": "new_item", "item": processed}
+                )
+                if discord_url:
+                    await send_discord_webhook(discord_url, processed)
+
+        if new_items_count or rejected_old_count or rejected_no_ts_count:
+            logging.info(
+                f"📊 Filtre '{name}' (id={filter_id}) : "
+                f"{new_items_count} nouveau(x), "
+                f"{rejected_old_count} ancien(s) rejeté(s), "
+                f"{rejected_no_ts_count} sans-ts rejeté(s)"
+            )
+
+
 async def scan_loop(app: FastAPI):
     """
-    Boucle principale de scan. Logique :
-    1. Pour chaque filtre, vérifier s'il a déjà été initialisé
-    2. Si non (premier scan) → marquer TOUS les items existants comme déjà vus
-       sans les afficher (sinon ce sont des annonces "anciennes")
-    3. Sinon → seuls les items vraiment nouveaux passent
+    Boucle principale de scan.
+    Tous les filtres sont scannés en parallèle (SCAN_CONCURRENCY à la fois)
+    pour réduire la latence de détection quand de nombreux filtres sont actifs.
     """
+    sem = asyncio.Semaphore(SCAN_CONCURRENCY)
     while True:
         try:
             async with app.state.db.execute(
@@ -449,140 +670,51 @@ async def scan_loop(app: FastAPI):
             ) as cursor:
                 filters = await cursor.fetchall()
 
-            for filter_id, user_id, url, name in filters:
-                items = await app.state.scraper.fetch_items(url)
-                if not items:
-                    continue
-
-                # Vérifier si c'est le premier scan de ce filtre
-                async with app.state.db.execute(
-                    "SELECT COUNT(*) FROM seen_items WHERE filter_id = ?",
-                    (filter_id,),
-                ) as c:
-                    already_seen_count = (await c.fetchone())[0]
-
-                is_first_scan = already_seen_count == 0
-
-                if is_first_scan:
-                    # ── Premier scan : on marque tous les items comme vus sans les notifier
-                    logging.info(
-                        f"🔄 Premier scan du filtre '{name}' (id={filter_id}) — "
-                        f"marquage de {len(items)} items existants comme déjà vus."
-                    )
-                    for item in items:
-                        item_id = item.get("id")
-                        if item_id:
-                            try:
-                                await app.state.db.execute(
-                                    "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
-                                    "VALUES (?, ?, ?)",
-                                    (item_id, filter_id, datetime.now()),
-                                )
-                            except Exception as e:
-                                logging.error(f"Erreur seen_items init : {e}")
-                    await app.state.db.commit()
-                    continue  # On passe au filtre suivant, pas de notif au 1er scan
-
-                # ── Scans suivants : SEULES LES VRAIES NOUVEAUTÉS PASSENT ──
-                new_items_count = 0
-                rejected_old_count = 0
-                rejected_no_ts_count = 0
-
-                for item in items[:20]:
-                    item_id = item.get("id")
-                    if not item_id:
-                        continue
-
-                    # Déjà vu ?
-                    async with app.state.db.execute(
-                        "SELECT 1 FROM seen_items WHERE item_id = ? AND filter_id = ?",
-                        (item_id, filter_id),
-                    ) as c:
-                        if await c.fetchone():
-                            continue
-
-                    # ════════════════════════════════════════════════════════════
-                    # FILTRE TEMPOREL STRICT : on REJETTE tout ce qui est trop vieux
-                    # ════════════════════════════════════════════════════════════
-                    real_ts = _extract_real_creation_ts(item)
-
-                    if real_ts is None:
-                        # Pas de timestamp fiable → on REJETTE par sécurité
-                        # (anciennement on laissait passer = bug d'annonces de 3 ans)
-                        rejected_no_ts_count += 1
-                        await app.state.db.execute(
-                            "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
-                            "VALUES (?, ?, ?)",
-                            (item_id, filter_id, datetime.now()),
-                        )
-                        continue
-
-                    age = datetime.now().timestamp() - float(real_ts)
-                    # Limite stricte : annonce postée dans les MAX_ITEM_AGE_SECONDS dernières secondes
-                    if age > MAX_ITEM_AGE_SECONDS:
-                        rejected_old_count += 1
-                        await app.state.db.execute(
-                            "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
-                            "VALUES (?, ?, ?)",
-                            (item_id, filter_id, datetime.now()),
-                        )
-                        continue
-
-                    if age < 0:
-                        # Timestamp dans le futur (improbable mais sécurité)
-                        await app.state.db.execute(
-                            "INSERT OR IGNORE INTO seen_items (item_id, filter_id, timestamp) "
-                            "VALUES (?, ?, ?)",
-                            (item_id, filter_id, datetime.now()),
-                        )
-                        continue
-
-                    # ✅ ITEM VRAIMENT NOUVEAU
-                    new_items_count += 1
-                    await app.state.db.execute(
-                        "INSERT INTO seen_items (item_id, filter_id, timestamp) "
-                        "VALUES (?, ?, ?)",
-                        (item_id, filter_id, datetime.now()),
-                    )
-
-                    processed = process_item(item, name, filter_id)
-
-                    await app.state.db.execute(
-                        "INSERT INTO items_cache (item_id, user_id, filter_id, data) "
-                        "VALUES (?, ?, ?, ?)",
-                        (item_id, user_id, filter_id, json.dumps(processed)),
-                    )
-                    await app.state.db.commit()
-
-                    # ── Notifications WS uniquement pour les tiers payants (pas free) ──
-                    # On regarde le tier de l'utilisateur
-                    async with app.state.db.execute(
-                        "SELECT tier FROM users WHERE id = ?", (user_id,)
-                    ) as c2:
-                        urow = await c2.fetchone()
-                    user_tier = urow[0] if urow else "free"
-
-                    if user_tier in TRIAL_TIERS:
-                        await app.state.manager.send_to_user(
-                            user_id, {"type": "new_item", "item": processed}
-                        )
-                    await asyncio.sleep(0.15)
-
-                # Log résumé de scan (pour debug)
-                if new_items_count or rejected_old_count or rejected_no_ts_count:
-                    logging.info(
-                        f"📊 Filtre '{name}' (id={filter_id}) : "
-                        f"{new_items_count} nouveau(x), "
-                        f"{rejected_old_count} ancien(s) rejeté(s), "
-                        f"{rejected_no_ts_count} sans-ts rejeté(s)"
-                    )
+            if filters:
+                tasks = [
+                    _scan_filter(app, fid, uid, url, name, sem)
+                    for fid, uid, url, name in filters
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for i, r in enumerate(results):
+                    if isinstance(r, Exception):
+                        logging.error(f"❌ Erreur filtre id={filters[i][0]} : {r}")
 
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logging.error(f"Erreur scan : {e}")
+            logging.error(f"Erreur scan_loop : {e}")
 
         await asyncio.sleep(CHECK_INTERVAL)
+
+
+# =============================================================================
+# NETTOYAGE AUTOMATIQUE DE LA BASE DE DONNÉES
+# =============================================================================
+async def cleanup_loop(app: FastAPI):
+    """
+    Supprime périodiquement les données obsolètes pour éviter la croissance
+    incontrôlée de la base SQLite :
+    - seen_items > 30 jours (les items anciens ne seront jamais re-détectés)
+    - items_cache > 7 jours (l'historique affiché dans l'UI reste léger)
+    """
+    while True:
+        try:
+            await asyncio.sleep(3600)  # Toutes les heures
+            cutoff_seen = (datetime.now() - timedelta(days=30)).isoformat()
+            cutoff_cache = (datetime.now() - timedelta(days=7)).isoformat()
+            await app.state.db.execute(
+                "DELETE FROM seen_items WHERE timestamp < ?", (cutoff_seen,)
+            )
+            await app.state.db.execute(
+                "DELETE FROM items_cache WHERE detected_at < ?", (cutoff_cache,)
+            )
+            await app.state.db.commit()
+            logging.info("🧹 Nettoyage DB effectué (seen_items > 30j, cache > 7j)")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.error(f"Erreur cleanup_loop : {e}")
 
 
 # =============================================================================
@@ -591,6 +723,10 @@ async def scan_loop(app: FastAPI):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db = await aiosqlite.connect(DB_NAME)
+    await db.execute("PRAGMA journal_mode = WAL")       # Lectures concurrentes sans blocage
+    await db.execute("PRAGMA synchronous = NORMAL")     # Plus rapide tout en restant safe
+    await db.execute("PRAGMA cache_size = -32768")      # 32 MB de cache en mémoire
+    await db.execute("PRAGMA temp_store = MEMORY")      # Tables temporaires en RAM
     await db.execute("PRAGMA foreign_keys = ON")
 
     await db.executescript("""
@@ -646,9 +782,31 @@ async def lifespan(app: FastAPI):
             FOREIGN KEY (filter_id) REFERENCES filters(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS feature_codes (
+            code TEXT PRIMARY KEY,
+            feature TEXT NOT NULL DEFAULT 'discord',
+            note TEXT,
+            max_uses INTEGER DEFAULT 1,
+            use_count INTEGER DEFAULT 0,
+            created_by INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS user_features (
+            user_id INTEGER NOT NULL,
+            feature TEXT NOT NULL,
+            unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            code_used TEXT,
+            PRIMARY KEY (user_id, feature),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
         CREATE INDEX IF NOT EXISTS idx_filters_user ON filters(user_id);
         CREATE INDEX IF NOT EXISTS idx_items_user ON items_cache(user_id, detected_at DESC);
         CREATE INDEX IF NOT EXISTS idx_items_filter ON items_cache(filter_id);
+        CREATE INDEX IF NOT EXISTS idx_seen_filter ON seen_items(filter_id);
+        CREATE INDEX IF NOT EXISTS idx_user_features ON user_features(user_id);
     """)
 
     # Migrations douces (pour DBs créées avant l'ajout de trial_started_at / trial_ends_at)
@@ -658,6 +816,18 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass  # colonne déjà présente
 
+    # Migrations paiements & notifications
+    for col in (
+        "stripe_customer_id TEXT",
+        "stripe_subscription_id TEXT",
+        "paypal_subscription_id TEXT",
+        "discord_webhook_url TEXT",
+    ):
+        try:
+            await db.execute(f"ALTER TABLE users ADD COLUMN {col}")
+        except Exception:
+            pass
+
     await db.commit()
 
     app.state.db = db
@@ -665,15 +835,18 @@ async def lifespan(app: FastAPI):
     await app.state.scraper.fetch_cookies()
     app.state.manager = ConnectionManager()
     app.state.scan_task = asyncio.create_task(scan_loop(app))
+    app.state.cleanup_task = asyncio.create_task(cleanup_loop(app))
 
     logging.info(f"✅ Vinted Sniper Web prêt sur http://{HOST}:{PORT}")
     yield
 
     app.state.scan_task.cancel()
-    try:
-        await app.state.scan_task
-    except asyncio.CancelledError:
-        pass
+    app.state.cleanup_task.cancel()
+    for task in (app.state.scan_task, app.state.cleanup_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     await app.state.scraper.close()
     await db.close()
 
@@ -845,6 +1018,73 @@ class InviteCreate(BaseModel):
     note: Optional[str] = None
 
 
+class SettingsUpdate(BaseModel):
+    discord_webhook_url: Optional[str] = None
+
+    @field_validator("discord_webhook_url")
+    @classmethod
+    def _webhook_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        v = v.strip()
+        valid = "discord.com/api/webhooks/" in v or "discordapp.com/api/webhooks/" in v
+        if not valid:
+            raise ValueError("URL Discord Webhook invalide — colle l'URL depuis Discord (Intégrations → Webhooks)")
+        return v
+
+
+class TierUpdate(BaseModel):
+    tier: str
+
+
+class PayPalVerifyIn(BaseModel):
+    subscription_id: str
+
+
+VALID_FEATURES = ("discord",)
+FEATURE_LABELS = {"discord": "Notifications Discord"}
+
+
+class FeatureCodeCreate(BaseModel):
+    count: int = 1
+    feature: str = "discord"
+    note: Optional[str] = None
+    max_uses: int = 1  # 0 = illimité
+
+    @field_validator("feature")
+    @classmethod
+    def _feature(cls, v: str) -> str:
+        if v not in VALID_FEATURES:
+            raise ValueError(f"Feature inconnue : {v!r}")
+        return v
+
+    @field_validator("count")
+    @classmethod
+    def _count(cls, v: int) -> int:
+        if v < 1 or v > 100:
+            raise ValueError("Quantité entre 1 et 100")
+        return v
+
+    @field_validator("max_uses")
+    @classmethod
+    def _max_uses(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("max_uses doit être >= 0")
+        return v
+
+
+class FeatureCodeRedeem(BaseModel):
+    code: str
+
+    @field_validator("code")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not v:
+            raise ValueError("Code vide")
+        return v
+
+
 # =============================================================================
 # ROUTES AUTH
 # =============================================================================
@@ -966,19 +1206,32 @@ async def login(payload: LoginIn, response: Response, request: Request):
         logging.warning(f"🔒 Login échoué : mot de passe incorrect pour user_id={row[0]}")
         raise HTTPException(401, "Identifiants invalides")
 
+    user_id_db, email, username, tier, trial_end = row[0], row[1], row[2], row[4], row[5]
+
+    # ── Promotion admin automatique (même failsafe que get_current_user) ──
+    # Corrige le cas où le compte a été créé avant que INITIAL_ADMIN_EMAIL soit défini,
+    # ou quand le trial a expiré et a dégradé le compte admin en 'free'.
+    if INITIAL_ADMIN_EMAIL and email == INITIAL_ADMIN_EMAIL and tier != "admin":
+        await db.execute(
+            "UPDATE users SET tier = 'admin' WHERE id = ?", (user_id_db,)
+        )
+        await db.commit()
+        tier = "admin"
+        logging.info(f"🔧 Promotion admin auto au login pour {email}")
+
     try:
-        set_auth_cookie(response, row[0])
+        set_auth_cookie(response, user_id_db)
     except Exception as e:
         logging.error(f"❌ Erreur création cookie : {e}")
         raise HTTPException(500, "Erreur serveur")
 
-    logging.info(f"✅ Login réussi : {row[2]} (id={row[0]}, tier={row[4]})")
+    logging.info(f"✅ Login réussi : {username} (id={user_id_db}, tier={tier})")
     return {
-        "id": row[0],
-        "email": row[1],
-        "username": row[2],
-        "tier": row[4],
-        "trial_ends_at": row[5],
+        "id": user_id_db,
+        "email": email,
+        "username": username,
+        "tier": tier,
+        "trial_ends_at": trial_end,
     }
 
 
@@ -1014,18 +1267,26 @@ async def list_filters(user: dict = Depends(get_current_user)):
 async def create_filter(
     payload: FilterCreate, user: dict = Depends(get_current_user)
 ):
-    # ── Limite à 3 filtres pour le tier 'free' ──
-    if user["tier"] == "free":
+    # ── Limites de filtres selon le tier ──
+    if user["tier"] in ("free", "trial"):
+        limit = MAX_FILTERS_FREE if user["tier"] == "free" else MAX_FILTERS_TRIAL
         async with app.state.db.execute(
             "SELECT COUNT(*) FROM filters WHERE user_id = ?", (user["id"],)
         ) as c:
             count = (await c.fetchone())[0]
-        if count >= MAX_FILTERS_FREE:
-            raise HTTPException(
-                403,
-                f"Limite de {MAX_FILTERS_FREE} filtres atteinte. "
-                "Passe à l'offre Pro pour des filtres illimités.",
-            )
+        if count >= limit:
+            if user["tier"] == "free":
+                raise HTTPException(
+                    403,
+                    f"Limite de {MAX_FILTERS_FREE} filtre(s) atteinte en plan gratuit. "
+                    "Passe à Pro pour des filtres illimités.",
+                )
+            else:
+                raise HTTPException(
+                    403,
+                    f"Limite de {MAX_FILTERS_TRIAL} filtres atteinte pendant l'essai gratuit. "
+                    "Passe à Pro pour des filtres illimités.",
+                )
 
     url = payload.url
     if "order=newest_first" not in url:
@@ -1241,6 +1502,485 @@ async def unmark_invite_used(code: str, admin: dict = Depends(require_admin)):
 
 
 # =============================================================================
+# ADMIN — CODES FONCTIONNALITÉS
+# =============================================================================
+@app.post("/api/admin/feature-codes")
+async def create_feature_codes(
+    payload: FeatureCodeCreate, admin: dict = Depends(require_admin)
+):
+    codes = []
+    note = (payload.note or "").strip() or None
+    try:
+        for _ in range(payload.count):
+            attempts = 0
+            while attempts < 10:
+                code = _gen_code()
+                try:
+                    await app.state.db.execute(
+                        "INSERT INTO feature_codes (code, feature, note, max_uses, created_by) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (code, payload.feature, note, payload.max_uses, admin["id"]),
+                    )
+                    codes.append(code)
+                    break
+                except aiosqlite.IntegrityError:
+                    attempts += 1
+            else:
+                await app.state.db.rollback()
+                raise HTTPException(500, "Impossible de générer un code unique, réessaie")
+        await app.state.db.commit()
+        logging.info(
+            f"🔐 {len(codes)} code(s) feature [{payload.feature}] générés par {admin['username']}"
+        )
+        return {"codes": codes}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            await app.state.db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(500, f"Erreur serveur : {e}")
+
+
+@app.get("/api/admin/feature-codes")
+async def list_feature_codes(_: dict = Depends(require_admin)):
+    async with app.state.db.execute(
+        "SELECT code, feature, note, max_uses, use_count, created_at "
+        "FROM feature_codes ORDER BY created_at DESC"
+    ) as c:
+        rows = await c.fetchall()
+    return [
+        {
+            "code": r[0],
+            "feature": r[1],
+            "feature_label": FEATURE_LABELS.get(r[1], r[1]),
+            "note": r[2],
+            "max_uses": r[3],
+            "use_count": r[4],
+            "created_at": r[5],
+            "is_exhausted": r[3] > 0 and r[4] >= r[3],
+        }
+        for r in rows
+    ]
+
+
+@app.delete("/api/admin/feature-codes/{code}")
+async def delete_feature_code(code: str, _: dict = Depends(require_admin)):
+    await app.state.db.execute("DELETE FROM feature_codes WHERE code = ?", (code,))
+    await app.state.db.commit()
+    return {"status": "ok"}
+
+
+# =============================================================================
+# USER — FONCTIONNALITÉS DÉBLOQUÉES
+# =============================================================================
+@app.get("/api/features")
+async def list_user_features(user: dict = Depends(get_current_user)):
+    async with app.state.db.execute(
+        "SELECT feature, unlocked_at FROM user_features WHERE user_id = ?",
+        (user["id"],),
+    ) as c:
+        rows = await c.fetchall()
+    return {
+        "features": [
+            {"feature": r[0], "label": FEATURE_LABELS.get(r[0], r[0]), "unlocked_at": r[1]}
+            for r in rows
+        ]
+    }
+
+
+@app.post("/api/features/redeem")
+async def redeem_feature_code(
+    payload: FeatureCodeRedeem, user: dict = Depends(get_current_user)
+):
+    code = payload.code
+
+    async with app.state.db.execute(
+        "SELECT feature, max_uses, use_count FROM feature_codes WHERE code = ?", (code,)
+    ) as c:
+        row = await c.fetchone()
+
+    if not row:
+        raise HTTPException(404, "Code invalide ou inexistant")
+
+    feature, max_uses, use_count = row
+
+    if max_uses > 0 and use_count >= max_uses:
+        raise HTTPException(400, "Ce code a déjà été utilisé au maximum")
+
+    async with app.state.db.execute(
+        "SELECT 1 FROM user_features WHERE user_id = ? AND feature = ?",
+        (user["id"], feature),
+    ) as c:
+        if await c.fetchone():
+            raise HTTPException(400, "Tu as déjà accès à cette fonctionnalité !")
+
+    await app.state.db.execute(
+        "INSERT INTO user_features (user_id, feature, code_used) VALUES (?, ?, ?)",
+        (user["id"], feature, code),
+    )
+    await app.state.db.execute(
+        "UPDATE feature_codes SET use_count = use_count + 1 WHERE code = ?", (code,)
+    )
+    await app.state.db.commit()
+    logging.info(f"🔓 User {user['id']} ({user['username']}) a débloqué '{feature}' avec code {code}")
+    return {"feature": feature, "label": FEATURE_LABELS.get(feature, feature)}
+
+
+# =============================================================================
+# CONFIGURATION PUBLIQUE (clés front-end non-sensibles)
+# =============================================================================
+@app.get("/api/config")
+async def get_config():
+    return {
+        "stripe_publishable_key": STRIPE_PUBLISHABLE_KEY,
+        "paypal_client_id": PAYPAL_CLIENT_ID,
+        "paypal_plan_id": PAYPAL_PLAN_ID,
+        "paypal_mode": PAYPAL_MODE,
+        "payments_enabled": bool(STRIPE_SECRET_KEY or PAYPAL_CLIENT_ID),
+        "plan_price": PLAN_PRICE,
+        "plan_currency": PLAN_CURRENCY,
+    }
+
+
+# =============================================================================
+# PARAMÈTRES UTILISATEUR (Discord webhook, etc.)
+# =============================================================================
+async def _user_has_feature(db, user_id: int, feature: str) -> bool:
+    async with db.execute(
+        "SELECT 1 FROM user_features WHERE user_id = ? AND feature = ?",
+        (user_id, feature),
+    ) as c:
+        return (await c.fetchone()) is not None
+
+
+@app.get("/api/settings")
+async def get_settings(user: dict = Depends(get_current_user)):
+    async with app.state.db.execute(
+        "SELECT discord_webhook_url, stripe_subscription_id, paypal_subscription_id "
+        "FROM users WHERE id = ?",
+        (user["id"],),
+    ) as c:
+        row = await c.fetchone()
+
+    # Admin a toujours accès ; les autres ont besoin du code feature
+    has_discord = user["tier"] == "admin" or await _user_has_feature(
+        app.state.db, user["id"], "discord"
+    )
+
+    async with app.state.db.execute(
+        "SELECT feature, unlocked_at FROM user_features WHERE user_id = ?",
+        (user["id"],),
+    ) as c:
+        feat_rows = await c.fetchall()
+
+    return {
+        "discord_webhook_url": row[0] if row else None,
+        "has_stripe_sub": bool(row[1]) if row else False,
+        "has_paypal_sub": bool(row[2]) if row else False,
+        "has_discord_feature": has_discord,
+        "features": [
+            {"feature": r[0], "label": FEATURE_LABELS.get(r[0], r[0]), "unlocked_at": r[1]}
+            for r in feat_rows
+        ],
+    }
+
+
+@app.put("/api/settings")
+async def update_settings(payload: SettingsUpdate, user: dict = Depends(get_current_user)):
+    if payload.discord_webhook_url is not None:
+        # Admin : toujours autorisé. Autres : besoin du code feature discord
+        if user["tier"] != "admin":
+            if not await _user_has_feature(app.state.db, user["id"], "discord"):
+                raise HTTPException(
+                    403,
+                    "Cette fonctionnalité nécessite un code spécial. "
+                    "Entre ton code dans Paramètres → Mes codes."
+                )
+    await app.state.db.execute(
+        "UPDATE users SET discord_webhook_url = ? WHERE id = ?",
+        (payload.discord_webhook_url, user["id"]),
+    )
+    await app.state.db.commit()
+    return {"status": "ok"}
+
+
+# =============================================================================
+# STRIPE — Paiements par abonnement
+# =============================================================================
+@app.post("/api/payments/stripe/checkout")
+async def stripe_create_checkout(user: dict = Depends(get_current_user)):
+    if not stripe_sdk:
+        raise HTTPException(503, "Package stripe non installé sur ce serveur")
+    if not STRIPE_SECRET_KEY or not STRIPE_PRICE_ID:
+        raise HTTPException(503, "Paiement Stripe non configuré sur ce serveur")
+    if user["tier"] == "pro":
+        raise HTTPException(400, "Tu es déjà abonné Pro !")
+
+    stripe_sdk.api_key = STRIPE_SECRET_KEY
+
+    # Récupérer ou créer le customer Stripe
+    async with app.state.db.execute(
+        "SELECT stripe_customer_id FROM users WHERE id = ?", (user["id"],)
+    ) as c:
+        row = await c.fetchone()
+    customer_id = row[0] if row else None
+
+    if not customer_id:
+        customer = await asyncio.to_thread(
+            lambda: stripe_sdk.Customer.create(
+                email=user["email"],
+                metadata={"user_id": str(user["id"]), "username": user["username"]},
+            )
+        )
+        customer_id = customer.id
+        await app.state.db.execute(
+            "UPDATE users SET stripe_customer_id = ? WHERE id = ?",
+            (customer_id, user["id"]),
+        )
+        await app.state.db.commit()
+
+    session = await asyncio.to_thread(
+        lambda: stripe_sdk.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=["card"],
+            line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+            mode="subscription",
+            success_url=STRIPE_SUCCESS_URL,
+            cancel_url=STRIPE_CANCEL_URL,
+            metadata={"user_id": str(user["id"])},
+            allow_promotion_codes=True,
+        )
+    )
+    logging.info(f"💳 Stripe checkout créé pour user {user['id']}")
+    return {"url": session.url}
+
+
+@app.post("/api/payments/stripe/webhook")
+async def stripe_webhook(request: Request):
+    if not stripe_sdk or not STRIPE_SECRET_KEY:
+        raise HTTPException(503, "Stripe non configuré")
+
+    stripe_sdk.api_key = STRIPE_SECRET_KEY
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+
+    try:
+        event = await asyncio.to_thread(
+            lambda: stripe_sdk.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+        )
+    except Exception as e:
+        logging.error(f"Stripe webhook signature invalide: {e}")
+        raise HTTPException(400, "Signature Stripe invalide")
+
+    etype = event["type"]
+    logging.info(f"🔔 Stripe event: {etype}")
+
+    if etype == "checkout.session.completed":
+        session = event["data"]["object"]
+        uid = int(session.get("metadata", {}).get("user_id", 0) or 0)
+        sub_id = session.get("subscription")
+        if uid:
+            await app.state.db.execute(
+                "UPDATE users SET tier = 'pro', stripe_subscription_id = ? WHERE id = ?",
+                (sub_id, uid),
+            )
+            await app.state.db.commit()
+            logging.info(f"✅ User {uid} → Pro (Stripe sub={sub_id})")
+
+    elif etype in ("customer.subscription.deleted", "customer.subscription.paused"):
+        sub = event["data"]["object"]
+        sub_id = sub["id"]
+        await app.state.db.execute(
+            "UPDATE users SET tier = 'free', stripe_subscription_id = NULL "
+            "WHERE stripe_subscription_id = ?",
+            (sub_id,),
+        )
+        await app.state.db.commit()
+        logging.info(f"⬇️ Stripe sub {sub_id} résiliée → free")
+
+    elif etype == "invoice.payment_failed":
+        inv = event["data"]["object"]
+        logging.warning(f"⚠️ Paiement Stripe échoué pour sub {inv.get('subscription')}")
+
+    return {"status": "ok"}
+
+
+@app.get("/api/payments/stripe/portal")
+async def stripe_portal(user: dict = Depends(get_current_user)):
+    if not stripe_sdk or not STRIPE_SECRET_KEY:
+        raise HTTPException(503, "Stripe non configuré")
+
+    stripe_sdk.api_key = STRIPE_SECRET_KEY
+
+    async with app.state.db.execute(
+        "SELECT stripe_customer_id FROM users WHERE id = ?", (user["id"],)
+    ) as c:
+        row = await c.fetchone()
+    customer_id = row[0] if row else None
+    if not customer_id:
+        raise HTTPException(400, "Aucun abonnement Stripe trouvé")
+
+    portal = await asyncio.to_thread(
+        lambda: stripe_sdk.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=STRIPE_SUCCESS_URL,
+        )
+    )
+    return {"url": portal.url}
+
+
+# =============================================================================
+# PAYPAL — Paiements alternatifs
+# =============================================================================
+async def _paypal_get_token() -> str:
+    async with aiohttp.ClientSession() as s:
+        async with s.post(
+            f"{PAYPAL_API_BASE}/v1/oauth2/token",
+            data="grant_type=client_credentials",
+            auth=aiohttp.BasicAuth(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            data = await resp.json()
+            return data.get("access_token", "")
+
+
+@app.post("/api/payments/paypal/verify")
+async def paypal_verify_subscription(
+    payload: PayPalVerifyIn, user: dict = Depends(get_current_user)
+):
+    if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+        raise HTTPException(503, "PayPal non configuré sur ce serveur")
+
+    token = await _paypal_get_token()
+    if not token:
+        raise HTTPException(502, "Impossible d'obtenir un token PayPal")
+
+    async with aiohttp.ClientSession() as s:
+        async with s.get(
+            f"{PAYPAL_API_BASE}/v1/billing/subscriptions/{payload.subscription_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            sub = await resp.json()
+
+    pp_status = sub.get("status", "")
+    pp_plan = sub.get("plan_id", "")
+
+    if pp_status == "ACTIVE" and (not PAYPAL_PLAN_ID or pp_plan == PAYPAL_PLAN_ID):
+        await app.state.db.execute(
+            "UPDATE users SET tier = 'pro', paypal_subscription_id = ? WHERE id = ?",
+            (payload.subscription_id, user["id"]),
+        )
+        await app.state.db.commit()
+        logging.info(f"✅ User {user['id']} → Pro (PayPal sub={payload.subscription_id})")
+        return {"status": "ok", "tier": "pro"}
+
+    raise HTTPException(
+        400,
+        f"Abonnement PayPal invalide (status: {pp_status!r}, plan: {pp_plan!r})",
+    )
+
+
+@app.post("/api/payments/paypal/webhook")
+async def paypal_webhook(request: Request):
+    body = await request.body()
+
+    # ── Vérification de signature PayPal (si PAYPAL_WEBHOOK_ID configuré) ──
+    if PAYPAL_WEBHOOK_ID and PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET:
+        try:
+            token = await _paypal_get_token()
+            verify_payload = {
+                "auth_algo": request.headers.get("paypal-auth-algo", ""),
+                "cert_url": request.headers.get("paypal-cert-url", ""),
+                "transmission_id": request.headers.get("paypal-transmission-id", ""),
+                "transmission_sig": request.headers.get("paypal-transmission-sig", ""),
+                "transmission_time": request.headers.get("paypal-transmission-time", ""),
+                "webhook_id": PAYPAL_WEBHOOK_ID,
+                "webhook_event": json.loads(body),
+            }
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    f"{PAYPAL_API_BASE}/v1/notifications/verify-webhook-signature",
+                    json=verify_payload,
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    verify_data = await resp.json()
+            if verify_data.get("verification_status") != "SUCCESS":
+                logging.warning("⚠️ PayPal webhook : signature invalide, requête rejetée")
+                raise HTTPException(400, "Signature webhook PayPal invalide")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.error(f"Erreur vérification webhook PayPal : {e}")
+            # Mode dégradé : on laisse passer si la vérif échoue côté réseau
+
+    data = json.loads(body)
+    etype = data.get("event_type", "")
+    logging.info(f"🔔 PayPal event: {etype}")
+
+    if etype in ("BILLING.SUBSCRIPTION.CANCELLED", "BILLING.SUBSCRIPTION.SUSPENDED"):
+        sub_id = data.get("resource", {}).get("id")
+        if sub_id:
+            await app.state.db.execute(
+                "UPDATE users SET tier = 'free', paypal_subscription_id = NULL "
+                "WHERE paypal_subscription_id = ?",
+                (sub_id,),
+            )
+            await app.state.db.commit()
+            logging.info(f"⬇️ PayPal sub {sub_id} annulée → free")
+
+    return {"status": "ok"}
+
+
+# =============================================================================
+# ADMIN — GESTION DES UTILISATEURS
+# =============================================================================
+@app.get("/api/admin/users")
+async def admin_list_users(admin: dict = Depends(require_admin)):
+    async with app.state.db.execute(
+        "SELECT id, email, username, tier, created_at, trial_ends_at "
+        "FROM users ORDER BY created_at DESC"
+    ) as c:
+        rows = await c.fetchall()
+    return [
+        {
+            "id": r[0],
+            "email": r[1],
+            "username": r[2],
+            "tier": r[3],
+            "created_at": r[4],
+            "trial_ends_at": r[5],
+        }
+        for r in rows
+    ]
+
+
+@app.put("/api/admin/users/{target_id}/tier")
+async def admin_update_user_tier(
+    target_id: int, payload: TierUpdate, admin: dict = Depends(require_admin)
+):
+    if payload.tier not in ("free", "trial", "accompaniment", "pro", "admin"):
+        raise HTTPException(400, f"Tier invalide: {payload.tier!r}")
+    async with app.state.db.execute(
+        "SELECT id FROM users WHERE id = ?", (target_id,)
+    ) as c:
+        if not await c.fetchone():
+            raise HTTPException(404, "Utilisateur introuvable")
+    await app.state.db.execute(
+        "UPDATE users SET tier = ? WHERE id = ?", (payload.tier, target_id)
+    )
+    await app.state.db.commit()
+    logging.info(
+        f"🔧 Admin {admin['username']} → user {target_id} tier={payload.tier}"
+    )
+    return {"status": "ok"}
+
+
+# =============================================================================
 # WEBSOCKET
 # =============================================================================
 @app.websocket("/ws")
@@ -1266,21 +2006,21 @@ async def websocket_endpoint(websocket: WebSocket):
 # =============================================================================
 @app.get("/")
 async def index():
-    return FileResponse("index.html")
+    return FileResponse("static/index.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     """Le navigateur demande /favicon.ico à la racine — on le sert directement."""
-    path = "favicon.ico"
+    path = "static/favicon.ico"
     if os.path.isfile(path):
         return FileResponse(
             path,
             media_type="image/x-icon",
             headers={"Cache-Control": "public, max-age=86400"},
         )
-    if os.path.isfile("logo.png"):
-        return FileResponse("logo.png", media_type="image/png")
+    if os.path.isfile("static/logo.png"):
+        return FileResponse("static/logo.png", media_type="image/png")
     raise HTTPException(404, "Favicon introuvable")
 
 
@@ -1288,16 +2028,17 @@ async def favicon():
 @app.get("/logo", include_in_schema=False)
 async def logo_redirect():
     """Logo sur la racine pour fiabilité (sert depuis /static/logo.png)."""
-    if os.path.isfile("logo.png"):
+    if os.path.isfile("static/logo.png"):
         return FileResponse(
-            "logo.png",
+            "static/logo.png",
             media_type="image/png",
             headers={"Cache-Control": "public, max-age=86400"},
         )
     raise HTTPException(404, "Logo introuvable")
 
 
-app.mount("/", StaticFiles(directory=".", html=True), name="static")
+if os.path.isdir("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 if __name__ == "__main__":
